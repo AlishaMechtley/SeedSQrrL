@@ -14,12 +14,13 @@ Notes: use ls -l to make sure that the permissions are correct (-rwxr-xr-x). If 
 Example, replace
 
 
-	```@output = qx($mirabait -k $k_bait -n 1 temp_baitfile.fasta $readpool $strainname-readpool-it$currentiteration);```
+	@output = qx($mirabait -k $k_bait -n 1 temp_baitfile.fasta $readpool $strainname-readpool-it$currentiteration);
 
 
 
 With:
-	```@output = qx($mirabait -k $k_bait -n 1 -b temp_baitfile.fasta $readpool -o $strainname-readpool-it$currentiteration);```
+	
+	@output = qx($mirabait -k $k_bait -n 1 -b temp_baitfile.fasta $readpool -o $strainname-readpool-it$currentiteration);
 
 
 
