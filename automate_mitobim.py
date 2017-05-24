@@ -1,3 +1,4 @@
+
 import subprocess
 import glob
 import gzip
@@ -26,7 +27,7 @@ def mitobim_notebook(seed_file):
     out_dirname = sample
     # If pattern matches SAMPLEID_GENE, extract sample name only
     if re.match('[A-Z]\d+_[A-Z]{2}_[A-Z]\d+$', sample) is None:
-        sample = sample.rsplit('_', 1)[0]
+        sample = sample.rsplit('_', 1)[0]subprocess
 
     try:
         sample_dir = glob.glob('RawReads*/*{}'.format(sample))[0]
