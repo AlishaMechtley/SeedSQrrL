@@ -1,4 +1,3 @@
-
 import subprocess
 import glob
 import gzip
@@ -27,26 +26,28 @@ def mitobim_notebook(seed_file):
     out_dirname = sample
     # If pattern matches SAMPLEID_GENE, extract sample name only
     if re.match('[A-Z]\d+_[A-Z]{2}_[A-Z]\d+$', sample) is None:
-        sample = sample.rsplit('_', 1)[0]subprocess
+        sample = sample.rsplit('_', 1)[0]
 
     try:
-        sample_dir = glob.glob('RawReads*/*{}'.format(sample))[0]
+        sample_dir = sorted(glob.glob('RawReads*/*{}'.format(sample)))[0]
     except IndexError:
         print('No sample dir found for {}'.format(sample))
         return
     try:
-        sample_dir = glob.glob('{}/redo/*{}'.format(sample_dir, sample))[0]
+        sample_dir = sorted(glob.glob('{}/redo/*{}'.format(sample_dir, sample)))[0]
         print('Found redo dir for {}, using it'.format(sample))
     except IndexError:
         pass
 
-    reads = glob.glob('{}/{}_*.gz'.format(sample_dir, sample))
+    reads =sorted(glob.glob('{}/{}_*.gz'.format(sample_dir, sample)))
     try:
         forward = [read for read in reads if 'R1' in read][0]
         reverse = [read for read in reads if 'R2' in read][0]
     except IndexError:
         print('Forward or reverse reads not found for {}'.format(sample))
         return
+
+    assert(forward.replace("R1","") == reverse.replace("R2",""))
 
     try:
         files_to_link = {'forward': os.path.abspath(forward),
@@ -199,8 +200,7 @@ def extract_good_pairs_and_singletons(to_process, out_dir):
         read_id = read.id[:-2]
         id_dict[read_id].append(read)
         if len(id_dict[read_id]) == 2:
-            # Sort by full read id (including the .X part at the end)
-            id_dict[read_id] = sorted(id_dict[read_id], key=lambda x: x.id)
+            id_dict[read_id] = sorted(id_dict[read_id])
             SeqIO.write(id_dict[read_id][0], pe_1_fh, 'fastq')
             SeqIO.write(id_dict[read_id][1], pe_2_fh, 'fastq')
             del id_dict[read_id]
@@ -222,14 +222,14 @@ def extract_good_pairs_and_singletons(to_process, out_dir):
 
 def rename_contigs(contigsfile, seedfile):
     with open(seedfile) as fh_seeds:
-        seed_names = [line for line in fh_seeds.readlines() if line.startswith('>')]
+        seed_names = [line.strip() for line in fh_seeds.readlines() if line.startswith('>')]
     with open(contigsfile, mode='r') as contig_fh:
         contig_lines = contig_fh.readlines()
     out_lines = []
     for seed_name, contig_name, contig in zip(seed_names, contig_lines[0::2],
                                               contig_lines[1::2]):
         assert(seed_name.split()[0] in contig_name)
-        out_lines += [seed_name.replace('\n', '_mitobim_assembly\n'), contig]
+        out_lines += [seed_name + '_mitobim_assembly\n', contig]
     with open(contigsfile, mode='w') as contig_fh:
         contig_fh.writelines(out_lines)
 
@@ -245,6 +245,6 @@ def split_seeds(seed_file):
     shutil.move(seed_file, seed_file+'.bak')
 
 if __name__ == '__main__':
-    all_seeds = glob.glob('seeds/*.seeds')
+    all_seeds = sorted(glob.glob('seeds/*.seeds'))
     for seed in all_seeds:
         mitobim_notebook(seed)
