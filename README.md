@@ -14,12 +14,12 @@ Notes: use ls -l to make sure that the permissions are correct (-rwxr-xr-x). If 
 Example, replace
 
 
-	@output = qx($mirabait -k $k_bait -n 1 temp_baitfile.fasta $readpool $strainname-readpool-it$currentiteration);
+	```@output = qx($mirabait -k $k_bait -n 1 temp_baitfile.fasta $readpool $strainname-readpool-it$currentiteration);```
 
 
 
 With:
-	@output = qx($mirabait -k $k_bait -n 1 -b temp_baitfile.fasta $readpool -o $strainname-readpool-it$currentiteration);
+	```@output = qx($mirabait -k $k_bait -n 1 -b temp_baitfile.fasta $readpool -o $strainname-readpool-it$currentiteration);```
 
 
 
@@ -40,7 +40,7 @@ Example, let’s say you wanted ND5 in addition to the six default genes:
 python mitoDBmaker.py SampleList.csv [\'CO1\',\'ND2\',\'12S\',\'16S\',\'COX1\',\'trnV\',\'ND5\']
 2. Run mitoDBRelativeMaker
 
-````$python mitoDBRelativemaker.py [samplelist]NeedReference.csv```
+```$python mitoDBRelativemaker.py [samplelist]NeedReference.csv```
 
 3. Create folder called “seeds”. Run mitoDBExtractor to Generate seed files.
 
@@ -57,7 +57,7 @@ Organize your samples in a folder called RawReads, with individual samples under
 
 Make sure all seeds are in a folder called seeds, and are named by the sample id (without the Sample_ part):
 
-Run '''$python automate_mitobim.py'''
+Run ```$python automate_mitobim.py```
 
 
 
