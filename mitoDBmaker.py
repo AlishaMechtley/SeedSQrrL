@@ -317,6 +317,7 @@ def getXML(genus, species, gene_or_genome, giID):
     # print "full organism name is " + str(org_list)
     organism = org_list.contents[0]  # Genus species
     org_name = str(organism).split()
+    print organism
 
     if genus != org_name[0] or species != org_name[1]:
         ##### check first two words of organism in case there is a subspecies listed ####
@@ -590,7 +591,7 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
         return None
 
     if rowcount>0:  # update
-        print "updating table for " + str(organism) + ' ' + str(gene)
+        print "updating table for " + str(genus_species) + ' ' + str(gene)
         #print get_full_taxonomy(genus, species)
         AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Subclass, Superorder, Order, Suborder, \
         Infraorder, Parvorder, Superfamily, Family, Subfamily, Tribe = get_full_taxonomy(genus, species)

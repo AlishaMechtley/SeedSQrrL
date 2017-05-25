@@ -1,514 +1,422 @@
-# mitoDBRelativeMaker.py
-# reads [SampleList]NeedReference.csv
-# for each item in list looks for closest relative in the NCBI database
-import sys
-import sqlite3
-import time
-import string
+# mitoDBExtractor.py
+# Reads in each line of a file containing id,family,genus,species,subspecies with no spaces.
+# For a each organism, finds the closest relative in the database
+# Check if genus exists in mitoDB.sqlite, Do same for Subfamily, etc.
+# Does not look in NCBI database for closest relative, will make another program to do this.
+
+################ Note ############################
+# consider possibly saving the full taxonomy for an organism
+# so we don't have to look it up twice
+# and maybe save the closest reference in a new table as well?
+# or will this be a lot of extra info we don't want in the end
+
+
 from collections import OrderedDict
 from bs4 import BeautifulSoup
+from ast import literal_eval
+import sqlite3
+import httplib
 from mitoDBmaker import get_response
-from mitoDBmaker import get_full_taxonomy
-from mitoDBmaker import get_gene_from_xml
+import sys
 
-from mitoDBExtractor import get_taxonomy
-from mitoDBExtractor import checkSynonyms
-from difflib import SequenceMatcher
-
-lastRequestTime = 0
+dbConnection = sqlite3.connect('mitoDB.sqlite')
+dbConnection.row_factory = sqlite3.Row
 
 
-def get_ids(rank_value, gene):
-    global lastRequestTime
-
-    #############################################################
-    # get the GenBank accession number via esearch, ex 256557273
-    #############################################################
-    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=nuccore&term=Atractaspis+bibronii+COX1
-    # Note: check that if subspecies isn't found, still finds species
-
-    url = '/entrez/eutils/esearch.fcgi?db=nuccore&term=' + rank_value + '+' + gene
-    print "url is" + str(url)
-
-    time_since_last_request = time.time() - lastRequestTime
-    if time_since_last_request < 0.3:
-        time.sleep(0.3 - time_since_last_request)
-    response = get_response(url)
-    lastRequestTime = time.time()
-
-    rData = response.read()
-    giSoup = BeautifulSoup(rData, 'xml')
-
-    giIdList = giSoup.IdList
-    translationSet = giSoup.TranslationSet.Translation
-
-    if translationSet is None:  # Genus not found, same geneOrGenome returned
-        print("			No query translation for " + str(rank_value) + " " + str(gene))
-        return None, None
-
-    translationString = translationSet.To.string
-    translation = translationString.split('"')
-    translation = translation[1].split(' ')
-    # How does this translation work for genus, family, etc?
-    if len(translation) == 1:
-        transRankValue = translation[0]
-
-    else:
-        print("		Improper query translation " + str(translation) + "for " + str(rank_value) + " " + str(gene))
-        return None, None
-
-    if giIdList.Id is None:  # No id returned for gene but name translation available
-        return None, transRankValue
-
-    # giIDs = giSoup.IdList.Id.string #only returns first id
-    giIdList = giSoup.IdList
-    giIDs = giIdList.find_all("Id")  # return a list of IDs
-    giIDs = [giId.string for giId in giIDs]
-    return giIDs, transRankValue  # returns "translated" rank Value, for subfamily level and higher
-
-
-def checkDb(rank, rankValue, gene):
+def checkSynonyms(genus, species):
+    trans_genus = None
+    trans_species = None
     cur = dbConnection.cursor()
-    missing_gene = False
-
-    # returns one row, assumes cellCount=24 but this will change if attributes change
-    # may want to check partial flag and only accept complete references at some point?
-    # partial_flag = str(results["PartialFlag"])
-    # acc_num = str(results["AccessionNumber"])
-    # if partial_flag == "0"
-    # boolean asks if partial. # zero is false: thus complete, 1 is true: thus partial
-    # print "Relative found in database."
-
+    organism = str(genus + " " + species)
     try:
-        # select = 'SELECT * FROM RefGenes WHERE Genus=? AND GeneName=?'
-        select = 'SELECT * FROM RefGenes WHERE "' + rank + '"=? AND GeneName=?'
-
-        cur.execute(select, (rankValue, gene))
-
-        results = cur.fetchone()
-    except:
-        print("Database table not found, creating tables.")
-        sql_command = '''CREATE TABLE "RefGenes" (
-        "Row" INTEGER NOT NULL ON CONFLICT ABORT PRIMARY KEY AUTOINCREMENT UNIQUE,
-        "AllOtherRank" TEXT,
-        "Superkingdom" TEXT,
-        "Kingdom" TEXT,
-        "Superphylum" TEXT,
-        "Phylum" TEXT,
-        "Subphylum" TEXT,
-        "Class" TEXT,
-        Subclass,
-        "Superorder" TEXT,
-        "Order" TEXT,
-        "Suborder" TEXT,
-        "Infraorder" TEXT,
-        "Parvorder" TEXT,
-        "Superfamily" TEXT,
-        "Family" TEXT,
-        "Subfamily" TEXT,
-        "Genus" TEXT NOT NULL ON CONFLICT ABORT,
-        "Tribe" TEXT,
-        "Species" TEXT NOT NULL ON CONFLICT ABORT,
-        "Subspecies" TEXT,
-        "GeneName" TEXT NOT NULL ON CONFLICT ABORT,
-        "GeneType" TEXT NOT NULL ON CONFLICT ABORT,
-        "AccessionNumber" TEXT NOT NULL ON CONFLICT ABORT,
-        "PartialFlag" INTEGER NOT NULL ON CONFLICT ABORT,
-        "GeneSequence" BLOB NOT NULL ON CONFLICT ABORT,
-        CONSTRAINT "NonDuplication" UNIQUE ("Genus", "Species", "GeneName", "AccessionNumber") ON CONFLICT ABORT
-        );'''
+        select = 'SELECT * FROM Synonyms WHERE Synonym=?'
+        cur.execute(select, (organism,))
+        fetched = cur.fetchone()
+    except sqlite3.OperationalError:
+        sql_command = '''CREATE TABLE "Synonyms" (
+        "Synonym" TEXT PRIMARY KEY ON CONFLICT ABORT UNIQUE ON CONFLICT ABORT NOT NULL ON CONFLICT ABORT,
+        "ReferenceName" TEXT NOT NULL ON CONFLICT ABORT
+        ); '''
         cur.execute(sql_command)
-        # select = 'SELECT * FROM RefGenes WHERE Genus=? AND GeneName=?'
-        select = 'SELECT * FROM RefGenes WHERE "' + rank + '"=? AND GeneName=?'
+        select = 'SELECT * FROM Synonyms WHERE Synonym=?'
+        cur.execute(select, (organism,))
+        fetched = cur.fetchone()
+    if fetched is not None:  # not a synonym
+        genus, species = str(fetched["Synonym"]).split()
+        trans_genus, trans_species = str(fetched["ReferenceName"]).split()
+        print(str(genus) + " translated to " + str(trans_genus) + " and " + str(species) + " translated to " + str(
+            trans_species))
 
-        cur.execute(select, (rankValue, gene))
+        # trans_genus=trans_genus.replace("u'", "")
 
+    return trans_genus, trans_species
+
+
+def get_taxonomy(genus, species=None):  # different return than DBMaker, uses dict; returns 3 fewer results
+    print "getting taxonomy"
+    # AllOtherRank=[]
+    Superkingdom = None
+    Kingdom = None
+    Superphylum = None
+    Phylum = None
+    Subphylum = None
+    Class = None
+    Subclass = None
+    Superorder = None
+    Order = None
+    Suborder = None
+    Infraorder = None
+    Parvorder = None
+    Superfamily = None
+    Family = None
+    Subfamily = None
+    Tribe = None
+
+    #####################################################################
+    # get id from taxonomy database for specified genus and species
+    #####################################################################
+    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=taxonomy&term=Eumetopias+jubatus
+    if species==None:
+        url = '/entrez/eutils/esearch.fcgi?db=taxonomy&term=' + str(genus) + '+' + str(species)
+    else:
+        url = '/entrez/eutils/esearch.fcgi?db=taxonomy&term=' + str(genus)
+    response = get_response(url)
+    rData = response.read()
+    id_soup = BeautifulSoup(rData, 'xml')
+
+    if id_soup is None:
+        print("No taxonomy xml returned")
+        return
+
+    if id_soup.eSearchResult is None or id_soup.eSearchResult.IdList.Id is None:
+        print("No id in taxonomy xml for: " + str(genus) + " " + str(species))
+        return
+
+    id = id_soup.eSearchResult.IdList.Id.string
+
+    #####################################################
+    # Get taxonomy xml for the id
+    #####################################################
+    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&id=34886&retmode=xml
+    url = '/entrez/eutils/efetch.fcgi?db=taxonomy&id=' + id + '&retmode=xml'
+    response = get_response(url)
+    rData = response.read()
+    fastaSoup = BeautifulSoup(rData, 'xml')
+
+    ###################################################
+    # check that the genus and species names are correct
+    ###################################################
+
+    orgList = fastaSoup.find("ScientificName")  # start value in list format
+    organism = orgList.contents[0]  # Genus species
+    org_name = str(organism).split()
+
+    Taxon = fastaSoup.find_all("Taxon")
+
+    if org_name[0] != genus:
+        correct_organism = False
+        Synonyms = Taxon[0].find_all("Synonym")
+        Synonyms += Taxon[0].find_all("GenbankSynonym")
+
+        for synonym in Synonyms:
+            if synonym is None or synonym.string is None:
+                continue
+            if len(org_name) < 2:  # missing species name, genus only
+                # check for synonym
+                if genus in synonym.string:
+                    correct_organism = True
+                    break
+            else:
+                scientific_name = genus + " " + species
+                if scientific_name in synonym.string:
+                    correct_organism = True
+                    break
+        if correct_organism == False:
+            print("synonym not found for " + str(genus) + " " + str(species))
+            return
+
+    ###############################################
+    # Get the lineage
+    ###############################################
+
+    for taxa in Taxon:
+
+        rank = taxa.find("Rank")
+        # if rank.string == "no rank":
+        # AllOtherRank += [str(taxa.ScientificName.string)]
+        if rank.string == "superkingdom":
+            Superkingdom = taxa.ScientificName.string
+        elif rank.string == "kingdom":
+            Kingdom = taxa.ScientificName.string
+        elif rank.string == "superphylum":
+            Superphylum = taxa.ScientificName.string
+        elif rank.string == "phylum":
+            Phylum = taxa.ScientificName.string
+        elif rank.string == "subphylum":
+            Subphylum = taxa.ScientificName.string
+        elif rank.string == "class":
+            Class = taxa.ScientificName.string
+        elif rank.string == "subclass":
+            Subclass = taxa.ScientificName.string
+        elif rank.string == "superorder":
+            Superorder = taxa.ScientificName.string
+        elif rank.string == "order":
+            Order = taxa.ScientificName.string
+        elif rank.string == "suborder":
+            Suborder = taxa.ScientificName.string
+        elif rank.string == "infraorder":
+            Infraorder = taxa.ScientificName.string
+        elif rank.string == "parvorder":
+            Parvorder = taxa.ScientificName.string
+        elif rank.string == "superfamily":
+            Superfamily = taxa.ScientificName.string
+        elif rank.string == "family":
+            Family = taxa.ScientificName.string
+        elif rank.string == "subfamily":
+            Subfamily = taxa.ScientificName.string
+        elif rank.string == "tribe":
+            Tribe = taxa.ScientificName.string
+        elif rank.string == "genus":
+            continue
+        elif rank.string == "species":
+            continue
+        # Subspecies is taken from the organism name in the xml, usually None is given
+        # else:
+        elif rank.string != "no rank":
+            print("unknown rank " + str(rank.string) + " " + str(taxa.ScientificName.string))
+            # AllOtherRank += [str(taxa.ScientificName.string)]
+
+            # if rank.string=="no rank" and taxa.ScientificName.string=="Cetartiodactyla":
+            #    order = "Cetartiodactyla"
+
+    return OrderedDict([
+        ("Tribe", Tribe),
+        ("Subfamily", Subfamily),
+        ("Family", Family),
+        ("Superfamily", Superfamily),
+        ("Parvorder", Parvorder),
+        ("Infraorder", Infraorder),
+        ("Order", Order),
+        ("Suborder", Suborder),
+        # ("AllOtherRank", str(AllOtherRank)),
+        ("Superorder", Superorder),
+        ("Sublass", Subclass),
+        ("Class", Class),
+        ("Subphylum", Subphylum),
+        ("Phylum", Phylum),
+        ("SuperPhylum", Superphylum),
+        ("Kingdom", Kingdom),
+        ("Superkingdom", Superkingdom)])
+
+
+def checkDb(rank, rankValue, geneList):
+    missing_gene_list = []
+    cur = dbConnection.cursor()
+    fasta = ""
+
+    for gene in geneList:
+        # check if the gene is present at the given taxonomic level
+        if rank == "Species":  # look for genus and species, since two Genus can potentially have same species
+            select = 'SELECT * FROM RefGenes WHERE Genus=? AND Species=? AND GeneName=?'
+            cur.execute(select, (genus, species, gene))
+        else:
+            # select = 'SELECT * FROM RefGenes WHERE Genus=? AND GeneName=?'
+            select = 'SELECT * FROM RefGenes WHERE "' + rank + '"=? AND GeneName=?'
+            cur.execute(select, (rankValue, gene))
         results = cur.fetchone()
 
-    if results is None:
-        # e.g., no gene present for organism of the given rank
-        missing_gene = True
+        if results is not None:  # returns one row, assumes cellCount=24 but this will change if attributes change
+            # print("fetching results for " + str(results["Genus"]) + " " + str(results["Species"]) + "for gene " + gene)
 
+            sequence = str(results["GeneSequence"])
+            acc_num = str(results["AccessionNumber"])
+            genus_used = str(results["Genus"])
+            species_used = str(results["Species"])
+            partial_flag = str(results["PartialFlag"])
+            if partial_flag == "0":
+                partial_or_complete = "complete"
+            if partial_flag == "1":
+                partial_or_complete = "partial"
+            # print("fasta-ing")
+            header = ">" + gene + '_' + genus_used + '_' + species_used + '_' + acc_num + '_' + rank + '_' + \
+                     rankValue + '_' + partial_or_complete
+            fasta += header + "\n" + sequence + "\n"
 
+        else:  # e.g., no gene present for organism of the given rank
+            missing_gene_list += [gene]  # still missing, keep in list
+            # print("making the missing")
+    # print("geneList is " + str(geneList) + "and missing_gene_list is " + str(missing_gene_list))
+    return missing_gene_list, fasta
 
-
-    return missing_gene
-
-
-def get_xml(rank_value, gene_or_genome, giID):
-    global lastRequestTime
-    is_tax_correct = False
-    ####################################################
-    # get sequence for specified gene or genome
-    ####################################################
-    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=256557273&retmode=xml
-    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=39753676&retmode=xml
-    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=440579124&retmode=xml
-
-    url = '/entrez/eutils/efetch.fcgi?db=nuccore&id=' + str(giID) + '&retmode=xml'
-    print("searching entrez for " + str(rank_value) + " " + str(gene_or_genome))
-
-    time_since_last_request = time.time() - lastRequestTime
-    if time_since_last_request < 0.3:
-        time.sleep(0.3 - time_since_last_request)
-    response = get_response(url)  # get_full_taxonomy
-    lastRequestTime = time.time()
-
-    r_data = response.read()
-
-    fasta_soup = BeautifulSoup(r_data, 'xml')
-    # NOTE: BeautifulSoup does not allow you to parse dashes in xml names
-
-    # check that rank_value is correct
-    org_list = fasta_soup.find("GBSeq_taxonomy")
-    # print "full organism name is " + str(org_list)
-    taxonomy_list = org_list.contents[0]  # Genus species
-    if rank_value in taxonomy_list:
-        is_tax_correct = True
-
-    if is_tax_correct == False:
-        ##### organism is incorrect ####
-        print(str(rank_value) + " not found in " + str(taxonomy_list) + ' for ' + str(gene_or_genome))
-        return None  # means it failed
-
-    return fasta_soup
-
-"""
-def get_gene_from_xml(fasta_soup, gene, db_connection):  # fasta_Soup is an object that contains the XML with the gene
-
-    # check for synonyms
-    # matching ratio is too high when comparing "NADH 1" and "NADH 2",
-    # so must use exact match for longer words
-    # Lists originally taken from http://www.genecards.org/ which has multiple sources including HUGO
-    gene_synonym = None
-    if gene == "COX1":
-        gene_synonym = ["CO1", "COI", "COXI", "Cytochrome C Oxidase I",
-                        "Cytochrome C Oxidase Subunit I", "MTCO1",
-                        "Mitochondrially Encoded Cytochrome C Oxidase I",
-                        "Cytochrome C Oxidase Polypeptide I", "EC 1.9.3.1"]
-    if gene == "CYTB":
-        gene_synonym = ["COB", "Cytochrome B", "cyt b",
-                        "Mitochondrially Encoded Cytochrome B", "Complex III Subunit 3",
-                        "Complex III Subunit III", "Cytochrome B-C1 Complex Subunit 3",
-                        "Ubiquinol-Cytochrome-C Reductase Complex Cytochrome B Subunit", "MTCYB"]
-    if gene == "ND2":
-        # must search for exact match here, seqMatcher will match "NADH" with "NADH2"
-        gene_synonym = ["NADH2", "NADH Dehydrogenase 2", "NADH Dehydrogenase Subunit 2",
-                        "Complex I ND2 Subunit", "NADH-Ubiquinone Oxidoreductase Chain 2", "MTND2",
-                        "Mitochondrially Encoded NADH Dehydrogenase 2", "EC 1.6.5.3"]
-    if gene == "12S":  # "12S rRNA gene" AND "12S ribosomal RNA" should be captured by 12S alone
-        gene_synonym = ["12S RNA", "s-rRNA", "Mitochondrially Encoded 12S RNA", "MTRNR1", "RNR1"]  # short
-        # note: gene for 12S is MT-RNR1 in animals
-    if gene == "16S":
-        gene_synonym = ["l-rRNA", "Mitochondrially Encoded 16S RNA", "MTRNR2", "RNR2",
-                        "Humanin Mitochondrial", "Formyl-Humanin", "Humanin", "HNM", "HN"]
-    if gene == "trnV":
-        gene_synonym = ["tRNA-Val", "TRNA Valine", "Mitochondrially Encoded TRNA Valine", "MTTV"]
-        # Note: TRNA is a known synonym but there are other types of TRNA. Check for this!!!
-
-    gene_loc = fasta_soup.find("GBSeq_locus")
-    gene_locus = gene_loc.contents[0]
-    # insert gene_locus into database, this is the accession number
-
-    genus_species = fasta_soup.find("GBSeq_organism")
-    genus_species = genus_species.contents[0]
-    genus_species = genus_species.split()
-    genus = genus_species[0]
-    species = genus_species[1]
-    try:
-        subspecies = genus_species[2]
-    except IndexError:
-        subspecies = None
-
-    seqList = fasta_soup.find("GBSeq_sequence")
-
-    if seqList is None:  # File contains only GBSeq_contig
-        print("		The xml file returned has no sequence. May be a file listing contigs.")
-        return None
-    sequence = seqList.contents[0]  # full sequence
-
-    # Find closest match to gene we are looking for
-    best_match = 0  # Start with no match, search for best
-    best_feature = None
-    best_word = None
-    features = fasta_soup.find_all("GBFeature")
-
-    for feat in features:
-        if feat.GBFeature_quals is None:
-            continue
-        # qualifiers = feat.GBFeature_quals.GBQualifier only finds first
-        qualifiers = feat.find_all("GBQualifier")
-        for qualifier in qualifiers:
-            if qualifier.GBQualifier_value is None:
-                continue
-            value = qualifier.GBQualifier_value.string
-
-            # Check entire value for a match before individual words
-            if value.upper() == gene.upper():
-                best_match = 1.0
-                best_feature = feat
-                best_word = value
-                break
-            if gene_synonym is not None:  # look for exact match of synonym
-                for syn in gene_synonym:
-                    if value.upper() == syn.upper():
-                        best_match = 1.0
-                        best_feature = feat
-                        best_word = value
-                        # print "##### gene synonym match ####" + str(syn)
-                        break  # want to break out of outer loop, make function?
-
-            # for each word in value
-            # check the matching ratio
-            words = value.split()
-            # print "words are " + str(words)
-
-            # if no exact match, check individual words
-            for word in words:
-                s = SequenceMatcher(None, word.upper(), gene.upper())
-                matchRatio = s.ratio()  # 0 is no match, 1 is perfect match
-                # if ratio is better that best match, save as best_feature and make new best_match score
-                if matchRatio > best_match:
-                    best_match = matchRatio
-                    best_feature = feat
-                    best_word = word
-
-    if best_feature is None:
-        print(str(gene) + " not found in XML file for " + genus + " " + species)
-        return None
-
-    if best_match is None:
-        print(str(gene) + " has no match found in XML file for " + genus + " " + species)
-        return None
-
-    gene_match = best_feature.GBFeature_quals.GBQualifier.GBQualifier_value.string
-
-    if 1 > best_match > 0.8:  # else below (prints closest) or perfect match (no print)
-        print("closest match for " + gene + " is " + best_word)
-
-    if best_match <= 0.8:
-        # print "############### No close match: " + str(best_word)
-        # print " for " + str(gene) + " of " + str(genus) + ' ' + str(species)
-        print("############### No close match: " + str(gene_match) + " for " + str(gene) + " of " + str(genus) + ' ' \
-              + str(species) + ' ' + str(gene_locus))
-
-        return None
-
-    # get start and stop
-    location = best_feature.GBFeature_location.string
-    print("LOCATION IS " + str(location))
-    if "join" in location:
-        try:
-
-            print("JOIN FOUND")
-            print("LOCATION IS " + str(location))
-            first, next = location.rsplit(",", 1)
-            print("NEXT IS " + str(next))
-            start, stop = next.split("..")
-            stop = stop.strip(")")
-            print("START IS " + str(start))
-            print("STOP IS " + str(stop))
-        except:
-            print("EXCEPTION IN JOIN")
-            return None
-
-        start, stop = location.split("..")
-        print("START IS " + str(start))
-        print("STOP IS " + str(stop))
-
-    partial = False
-    is_complement = False
-
-    if "complement" in start:  # check for complement() and remove
-        start = start.strip("complement(")
-        # stop = stop.strip(")")
-        is_complement = True
-
-        stop = stop.strip(")")
-
-    if "<" in start or ">" in stop:  # check for &lt, &gt which indicates partial, and remove
-        partial = True
-        # insert partial into database
-        start = start.strip("<")
-        stop = stop.strip(">")
-
-    start = int(start) - 1  # NCBI uses 1 for first item, python requires zero
-    stop = int(stop)
-    sequence = sequence[start:stop]
-
-    # Complements require a==>t, g==> c, etc.
-    translation_table = string.maketrans("atugcyrswkmbdhvn", "taacgryswmkvhdbn")
-
-    if is_complement:
-        translated_sequence = string.translate(str(sequence), translation_table)  # take complement
-        sequence = translated_sequence[::-1]  # reverse order
-
-    # Save whether it is a gene or cds, rna, etc
-    feature_type = best_feature.GBFeature_key.string
-
-    # save organism for header, and insert as a field or column in database
-    # organism = fasta_soup.GBSeq_organism.string
-
-    # submitToDatabase:
-    # genus=>Genus, species=>Species, gene=>GeneName , gene_locus=>AccessionNumber, partial=>PartialFlag,
-    # and sequence=>GeneSequence
-    con = db_connection
-    cur = con.cursor()
-
-    # Check if the Genus, Species, Gene, and accession number and sequence already exist in the database
-    # If it returns something, print the thing and do not update
-    # otherwise update
-
-    select = 'SELECT * FROM RefGenes WHERE Genus=? AND Species=? AND GeneName=? AND AccessionNumber=?'
-
-    cur.execute(select, (genus, species, gene, gene_locus))
-    # figure out how many rows it returned.
-
-    rowcount = len(cur.fetchall())
-
-    if rowcount < 0:
-        print("invalid rowcount")
-
-    if rowcount > 0:  # update
-        # print "updating table for " + str(organism) + ' ' + str(gene)
-        AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Superorder, Order, Suborder, \
-        Infraorder, Parvorder, Superfamily, Family, Subfamily = get_full_taxonomy(genus, species)
-
-        AllOtherRank = AllOtherRank.replace("\'", "")
-        update = ''' UPDATE RefGenes SET
-            AllOtherRank=?, Superkingdom=?, Kingdom=?, Superphylum=?, Phylum=?, Subphylum=?, Class=?,
-            Superorder=?, "Order"=?, Suborder=?, Infraorder=?, Parvorder=?,
-            Superfamily=?, Family=?, Subfamily=?, Genus=? , Species=?, subspecies=?,
-            GeneName=? , GeneType=?, AccessionNumber=? , PartialFlag=?, GeneSequence=?
-            WHERE Genus=? AND Species=? AND GeneName=? AND AccessionNumber=? AND GeneSequence=?
-            '''
-
-        cur.execute(update, (AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Superorder,
-                             Order, Suborder, Infraorder, Parvorder, Superfamily, Family, Subfamily, genus, species,
-                             subspecies, gene, feature_type, gene_locus, int(partial), sequence, genus, species, gene,
-                             gene_locus, sequence))
-
-    if rowcount == 0:  # insert
-        AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Superorder, Order, Suborder, \
-        Infraorder, Parvorder, Superfamily, Family, Subfamily = get_full_taxonomy(genus, species)
-        AllOtherRank = AllOtherRank.replace("\'", "")
-        insert = 'INSERT INTO RefGenes (AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, ' \
-                 'Superorder, "Order", Suborder, Infraorder, Parvorder, Superfamily, Family, Subfamily, Genus, ' \
-                 'Species, subspecies, GeneName, GeneType, AccessionNumber, PartialFLag, GeneSequence) ' \
-                 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-        cur.execute(insert, (AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Superorder,
-                             Order, Suborder, Infraorder, Parvorder, Superfamily, Family, Subfamily, genus, species,
-                             subspecies, gene, feature_type, gene_locus, int(partial), sequence))
-
-    con.commit()
-
-    return "successful"
-
-"""
 
 if __name__ == '__main__':
+    # Add ability to limit the rank that a relative seed can be extracted.
 
-    #create an "old taxonomy" so that we don't have to search for the taxonomy every time
-    old_genus = None
-    old_gene = None
+    single_seed = "n"
+    i = 0
     try:
-        sample_list = sys.argv[1]  # raw data list from Alan's lab [gene, id, family, genus, species]
+        sample_list = sys.argv[1]  # raw data list from Alan's lab [id, family, genus, species]
+
 
     except IndexError:
-        # print "please specify a filename"
-        print("Using default sample list.")
-        sample_list = "SampleListNeedReference.csv"
+        # print("please specify a filename")
+        print("using default filename")
+        # sample_list = "Zaher18Samples.csv"
+        sample_list = "SampleList.csv"
+
+    try:
+        single_seed = sys.argv[2]
+        if single_seed == "y" or single_seed == "Y":
+            single_seed = "y"
+
+    except IndexError:
+        print("Gene seeds will be contained in the same file.")
+
+    try:
+        geneList = literal_eval(sys.argv[3])  # i.e. geneList=[\'COX1\', \'ND2\',\'12S\',\'16S\',\'ND5\']
+        # populateRelatives = sys.argv[3]
+        # Check that genes are qualified geneList names, to avoid redundant DB entries
+        for gene in geneList:
+            if gene.upper() == "COX1":
+                continue
+            if gene.upper() == "ND2":
+                continue
+            if gene.upper() == "12S":
+                continue
+            if gene.upper() == "16S":
+                continue
+            if gene.upper() == "ND5":
+                continue
+            if gene.upper() == "CYTB":
+                continue
+            if gene.upper()=="matK":
+                continue
+            if gene.upper()=="rbcL":
+                continue
+            # if gene.upper()=="";
+            #    continue
+            else:
+                print("Please use one of the following gene names: ['COX1', 'ND2','12S','16S','ND5']")
+
+    except IndexError:
+        print("Using default gene list and no relative population in database")
+        #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
+        # populateRelatives = "No"
+        geneList = ['matK', 'rbcL']
+
 
     with open(sample_list, 'r') as sample:
         lines = sample.readlines()
-        dbConnection = sqlite3.connect('./mitoDB.sqlite')
 
         for line in lines:
+            # read in list of Genus species names
+            # Get the genus and species name from comma delimited file (e.x. ZaherRaw.csv)
+            # line = line.strip() #should not have any spaces
             line = line.replace('\n', '')
             cells = line.split(',')
-            gene = cells[0]
-            id = cells[1]
-            family = cells[2]
-            genus = cells[3]
-            species = cells[4]
-            # genus = cells[2]
-            # species = cells[3]
+            id = cells[0]
+            family = cells[1]
+            genus = cells[2]
+            species = cells[3]
+            trans_genus = None
+            trans_species = None
+            fasta = ""
+            missing_gene_list = list(geneList)  # LISTS ARE MUTABLE
 
-            print "searching for " + str(genus) + " " + str(gene)
-            if genus == old_genus and gene == old_gene:
-                continue
-            ########################################################
-            ############## check for genus first ###################
-            ########################################################
-            # We already know the gene for this species is not in the database
-            # since this uses an output file from MitoDBmaker
-            # best to start with full genome of relative of same genus, but will disregard for now
-
-            # missing_gene = checkDb("Genus", genus, gene)
-
-            trans_genus, trans_species = checkSynonyms(genus, species)
-            if trans_genus is not None:
-                print(" translated " + str(genus) + " to " + str(trans_genus))
-                genus = trans_genus
-                print(" translated " + str(species) + " to" + str(trans_species))
-                species = trans_species
-
-            taxonomy = OrderedDict([("Genus", genus)])  # add genus
-            print("taxonomy is")
-            print OrderedDict
-            temp_taxonomy = get_taxonomy(genus, species)
-            if temp_taxonomy is None:
-                print("No taxonomy for " + str(genus))
-                temp_taxonomy = get_taxonomy(family, " ")
-
-                if temp_taxonomy is None:
-                    print("No taxonomy for " + str(family))
+            ##### Look for same subspecies in sqlite first????###
+            if species != "sp.":
+                rank0 = "Species"  # the rank as it appears in the Database
+                rankValue0 = species
+                missing_gene_list, fasta_lines = checkDb(rank0, rankValue0, missing_gene_list)
+                if fasta_lines is not None:
+                    fasta += fasta_lines  # Two lines appended, a header and a gene sequence (may be None)
+                    # if populateRelatives=="yes" AND fasta_lines is None:
+                    # giIDs, trans_genus, trans_species = mitoDBmaker.get_ids(genus, species, subspecies, geneOrGenome)
                 else:
-                    print("family found")
+                    # Check synonyms in DB, if exists then use reference name
+                    trans_genus, trans_species = checkSynonyms(genus, species)
+                    if trans_genus is not None:
+                        print(" translated " + str(genus) + " to " + str(trans_genus))
+                        genus = trans_genus
+                        print(" translated " + str(species) + " to" + str(trans_species))
+                        species = trans_species
+                        missing_gene_list, fasta_lines = checkDb(rank0, rankValue0, missing_gene_list)
+                        if fasta_lines is not None:
+                            fasta += fasta_lines
 
-            # temp_taxonomy = get_taxonomy(family, " ")
-            taxonomy.update(temp_taxonomy)  # add everything else
-            for rank, rank_value in taxonomy.items():
-                print("rank is " + str(rank) + " " + str(rank_value))
-                if rank_value is None:
-                    continue
-                missing_gene = checkDb(rank, rank_value, gene)
+            if len(missing_gene_list) != 0:
+                rank1 = "Genus"  # the rank as it appears in the Database
+                print("Checking genus for " + str(genus) + " " + str(species))
+                rankValue1 = genus
+                missing_gene_list, fasta_lines = checkDb(rank1, rankValue1, missing_gene_list)
+                if fasta_lines is not None:
+                    fasta += fasta_lines  # Two lines appended, a header and a gene sequence (may be None)
+                    # else:
+                    #    giIDs, transRankValue =  mitoDBRelativeMaker.get_ids(rankValue, gene)
 
-                if missing_gene:  # still missing, search NCBI for gene
-                    # gi_ids, translated_genus = get_ids(genus, gene)
-                    gi_ids, translated_rank_value = get_ids(rank_value, gene)
-                    print("getting ids")
+            if len(missing_gene_list) != 0:  # No genus present, search for full taxonomy
+                # If genes remain to be found, find taxonomy and use relative for those genes
+                # AllOtherRank,Superkingdom,Kingdom,Superphylum,Phylum,Subphylum,Class,Superorder,Order,Suborder,Infraorder,Parvorder,Superfamily,Family,Subfamily = get_full_taxonomy(genus,species)
+                # ranks = [Subfamily, Family, Superfamily, Parvorder, Infraorder, Order, AllOtherRank, Superorder, Class, Subphylum, Phylum, SuperPhylum, Kingdom, SuperKingdom]
 
-                    if translated_rank_value is None or translated_rank_value != rank_value:
-                        print(" Improper value returned: " + str(translated_rank_value) + " for " + str(rank_value))
-                        # Will the translated_rank_value ever be None? - yes
-                        continue  # up to next rank
+                temp_taxonomy = get_taxonomy(genus, species)
+                if temp_taxonomy is None:
+                    print("####### No taxonomy for " + str(genus) + " " + str(species))
+                    temp_taxonomy = get_taxonomy(genus)
+                    if temp_taxonomy is None:
+                        print("## No taxonomy for " + str(genus))
+                        if temp_taxonomy is None:
+                            temp_taxonomy = get_taxonomy(family)
+                            if temp_taxonomy is None:
+                                print("No taxonomy for " + str(family) + " " + str(genus) + " " + str(species))
+                                temp_taxonomy = taxonomy = OrderedDict([("Family", family)])
+                                print("update seed file manually above family level")
+                            else:
+                                print("family found")
+                temp_taxonomy = taxonomy = OrderedDict([("Family", family)])
 
-                    else:  # we have the correct Genus (or rank)
-                        print("have correct rank")
-                        entry = None
-                        if gi_ids is not None:
-                            for gi_id in gi_ids:
-                                print("getting xml")
+                # print(temp_taxonomy)
+                for rank, rankValue in temp_taxonomy.items():
 
-                                xml = get_xml(rank_value, gene, gi_id)  # get the xml for that genus (rank)
-                                #print "xml is " + str(xml)
-                                if xml is not None:  # Genome present
-                                    entry = get_gene_from_xml(xml, gene, dbConnection)
-                                    print("entry is: ", str(entry))
+                    if rankValue is None:
+                        continue
+                    else:
+                        print("iteration: " + str(rank) + " " + str(rankValue) + " " + str(
+                            missing_gene_list[0]) + " for " + str(genus) + " " + str(species))
+                        missing_gene_list, fasta_lines = checkDb(rank, rankValue, missing_gene_list)
+                        if fasta_lines is not None:
+                            fasta += fasta_lines  # Two lines appended, a header and a gene sequence (may be None)
 
-                                    if entry is not None:  # successful entry
-                                        break  # break from ids
+                        if len(missing_gene_list) == 0:
+                            # save (append) gene in fasta file for that species
+                            # line of info followed by line of sequence
+                            # filePrefix = genus + '_' + species #Want to use id instead
+                            # f_out= open(filePrefix + ".seeds", 'w')
+                            if single_seed == "y":
+                                f_out = open("./seeds/" + id + "_" + str(i) + ".seeds", 'w')
+                                i = i + 1
+                            else:
+                                f_out = open("./seeds/" + id + ".seeds", 'w')
+                            f_out.write(fasta)
+                            f_out.close()
+                            break
 
-                                    else:
-                                        # gene name or gene location not found in xml
-                                        print("gene name doesn't match or gene location not given in xml")
-                                        # goes to the next gi_id
+            else:  # missing_gene_list is None, species or Genus was present
+                # print("writing to file")
+                # filePrefix = genus + '_' + species
+                if single_seed == "y":
+                    f_out = open("./seeds/" + id + "_" + str(i) + ".seeds", 'w')
+                    i = i + 1
+                else:
+                    f_out = open("./seeds/" + id + ".seeds", 'w')
+                f_out.write(fasta)
+                f_out.close()
+                #### NOTE: Still need to add an optional check to NCBI when not found in database ####
+                ##### Will write over fasta files of same species with a different subspecies
+                #### Need to handle AllOtherRank for optional NCBI search
 
-                    if entry is not None:
-                        break  # entry was successful, break out of rank loop
-                else:  #
-                    print"Gene already found in DB for that organism, continuing onto next sample"
-                    break
-        old_genus = genus
-        old_gene = gene
+        dbConnection.close()
+
+
+        # Create an option to search for relatives in NCBI and populate database if none found
+        # modify superextender to use only the line of the gene you want (sys args)
