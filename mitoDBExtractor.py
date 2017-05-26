@@ -303,10 +303,7 @@ if __name__ == '__main__':
 
     except IndexError:
         print("Using default gene list")
-        #geneList = ['accD', 'atpB', 'ndhF', 'ndhJ', 'psbA', 'rpS4', 'rpL32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnC-ycf6 intergenic spacer', 'trnC-rpoB intergenic spacer', 'trnE', 'trnG', 'trnH', 'rpl32-trnL intergenic spacer region', 'trnK', 'trnL', 'trnS', 'trnS-trnG intergenic spacer', 'trnT-trnL intergenic spacer', 'trnT-trnL' 'trnY', 'ycf5', 'ycf6']
-        #geneList = ['accD', 'atpB', 'ndhF', 'ndhJ', 'psbA', 'rpoB', 'trnG', 'trnH', 'trnK', 'trnL', 'trnY', 'ycf6']
-        #geneList=['ITS1','ITS2','rpoB','rpoC1']
-        geneList = ['atpB', 'atpF', 'ndhF', 'psbA', 'rpl32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnE', 'trnG', 'trnH', 'trnK', 'trnS', 'trnT', 'trnY', 'ycf6', 'ITS1', 'ITS2']
+        geneList = ['matK', 'rbcL', 'atpB', 'atpF', 'ndhF', 'psbA', 'rpl32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnE', 'trnG', 'trnH', 'trnK', 'trnS', 'trnT', 'trnY', 'ycf6', 'ITS1', 'ITS2']
 
         #print geneList
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
