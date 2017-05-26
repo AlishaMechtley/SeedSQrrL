@@ -746,8 +746,9 @@ if __name__ == '__main__':
     except IndexError:
         print "Using default gene list"
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
+        geneList=['ITS1','ITS2','matK','rbcL']
         # psbK-I
-        geneList = ['matK', 'rbcL', 'atpB', 'atpF', 'ndhF', 'psbA', 'rpl32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnE', 'trnG', 'trnH', 'trnK', 'trnS', 'trnT', 'trnY', 'ycf6', 'ITS1', 'ITS2']
+        #geneList = ['atpB', 'atpF', 'ndhF', 'psbA', 'rpl32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnE', 'trnG', 'trnH', 'trnK', 'trnS', 'trnT', 'trnY', 'ycf6', 'ITS1', 'ITS2']
 
     old_genus = None
     old_species = None
