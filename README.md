@@ -6,10 +6,18 @@ The next program, mitoDBRelativeMaker, will find relatives for the resulting lis
 
 ### How to Install
 
-Use Anaconda Python 2.7 distribution. Install the necessary bs4 and biopython (for mitobim) modules using the following command in a terminal:
+Use Anaconda Python 2.7 distribution.
+
+Install the necessary bs4 and biopython (for mitobim) modules using the following command in a terminal:
 conda install beautifulsoup4 biopython
+
+
 Copy the three SeedSQrrL programs and the automate_mitobim.py program into the folder where you are going to run them.
+
+
 Install mitobim and its necessary packages (mira, flash, perl if not already installed but probably is). For mitobim, just copy MITObim_1.8.pl to /usr/local/bin or elsewhere in your $PATH and chmod a+x. For mira, you can download the platform-appropriate compiled binaries (mira_4.0.2_darwin…tar.bz2 for OSX, mira_4.0.2_linux-gnu...tar.bz2 for linux), and copy everything from the tar.bz2 file’s bin/ folder into the same place as mitobim above (e.g. /usr/local/bin). Copy everything from the mira library (lib) folder into usr/local/lib
+
+
 Notes: use ls -l to make sure that the permissions are correct (-rwxr-xr-x). If there is an @ at the end of the permissions, use xattr -d com.apple.quarantine /usr/local/bin/filename on the file. This will likely need to be done on the mira executable and the library files. If you are using a recent version of mira (e.g. greater than 4.0.2) then mitobim needs to specify the bait and output files with a command. So you must add these to line 290 of the mitobim.pl file.
 Example, replace
 
@@ -34,14 +42,18 @@ With:
 
 To Run SeedSQrrL:
 
+
 1. Run mitoDBMaker
 ```$python mitoDBmaker.py [samplelist].csv [optional genelist]```
 
-Example, let’s say you wanted ND4 in addition to the six default genes:
-python mitoDBmaker.py SampleList.csv [\'CO1\',\'ND2\',\'12S\',\'16S\',\'COX1\',\'ND5\',\'ND4\']
-2. Run mitoDBRelativeMaker
 
+Example, let’s say you wanted ND4 in addition to the six default genes:
+```python mitoDBmaker.py SampleList.csv [\'CO1\',\'ND2\',\'12S\',\'16S\',\'COX1\',\'ND5\',\'ND4\']```
+
+
+2. Run mitoDBRelativeMaker
 ```$python mitoDBRelativemaker.py [samplelist]NeedReference.csv```
+
 
 3. Create folder called “seeds”. Run mitoDBExtractor to Generate seed files.
 
@@ -54,9 +66,10 @@ python mitoDBmaker.py SampleList.csv [\'CO1\',\'ND2\',\'12S\',\'16S\',\'COX1\',\
 
 
 #### To run Mitobim
-Organize your samples in a folder called RawReads, with individual samples underneath, in folders named named Sample_PXXXX_FG_IXXXX. The (still gzipped) sample files go inside. For each sample, if there is a folder called redo inside, samples therein will be used instead:
+Organize your samples in a folder called RawReads, with individual samples underneath, in folders named named Sample_PXXXX_FG_IXXXX. When FG are any two letters. 
+The (still gzipped) sample files go inside. For each sample, if there is a folder called redo inside, samples therein will be used instead.
 
-Make sure all seeds are in a folder called seeds, and are named by the sample id (without the Sample_ part):
+Make sure all seeds are in a folder called seeds, and are named by the sample id (without the Sample_ part, should start with 'P00').
 
 Run ```$python automate_mitobim.py```
 
