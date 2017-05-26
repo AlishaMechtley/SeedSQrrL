@@ -188,7 +188,7 @@ def get_full_taxonomy(genus, species):
     #####################################################
     # Get taxonomy xml for the id
     #####################################################
-    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&id=509078&retmode=xml
+    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&id=241197&retmode=xml
     url = '/entrez/eutils/efetch.fcgi?db=taxonomy&id=' + id + '&retmode=xml'
     time_since_last_request = time.time()-lastRequestTime
     if time_since_last_request < 0.3:
@@ -298,7 +298,9 @@ def getXML(genus, species, gene_or_genome, giID):
     ####################################################
     # get sequence for specified gene or genome
     ####################################################
-    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=189164442&retmode=xml
+    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=1043616945&retmode=xml
+    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=104360349&retmode=xml
+
     url = '/entrez/eutils/efetch.fcgi?db=nuccore&id=' + giID + '&retmode=xml'
 
     time_since_last_request = time.time()-lastRequestTime
@@ -346,7 +348,6 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
     # matching ratio is too high when comparing "NADH 1" and "NADH 2",
     # so must use exact match for longer words
     # Lists originally taken from http://www.genecards.org/ which has multiple sources including HUGO
-    print "getting gene from xml"
     gene_synonym = None
     if gene =="COX1":
         gene_synonym = ["CO1", "COI", "COXI", "Cytochrome C Oxidase I",
@@ -378,6 +379,32 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
         "Mitochondrially Encoded NADH Dehydrogenase 5", 
         "NADH Dehydrogenase, Subunit 5 (Complex I)", "NADH-Ubiquinone Oxidoreductase Chain 5",
         "Complex I ND5 Subunit","NADH Dehydrogenase 5","NADH5"]
+    if gene == 'atpF':
+        gene_synonym = ['atpF-atpH intergenic spacer']
+    if gene ==  'psbK':
+        gene_synonym = ['psbK-psbI intergenic spacer']
+    if gene == 'trnC':
+        gene_synonym = ['trnC-ycf6 intergenic spacer']
+    if gene == 'trnE':
+        gene_synonym = ['trnE-trnY intergenic spacer']
+    if gene == 'trnH':
+        gene_synonym = ["trnH-psbA intergenic spacer", 'trnH-psbA intergenic spacer region']
+    if gene == 'trnT':
+        gene_synonym = ["trnT-trnL", 'trnT-trnL intergenic spacer']
+    if gene == 'trnS':
+        gene_synonym = ["trnS-trnG intergenic spacer"]
+    if gene == 'rpoB':
+        gene_synonym = ['RNA polymerase beta subunit']
+    if gene == 'rpoC1':
+        gene_synonym = ['RNA polymerase C']
+    if gene == 'rpl32':
+            gene_synonym = ['rpl32-trnL(UAG) intergenic spacer','contains rpl32 gene (partial), rpl32-trnL IGS and trnL gene (partial)','contains rpl32 gene and rpl32-trnL intergenic spacer', 'rpl32-trnL intergenic spacer region']
+    if gene == 'ITS1':
+            gene_synonym = ['internal transcribed spacer 1', 'internal transcribed spacer 1, ITS1', 'sequence contains ITS1, 5.8S rRNA gene, ITS2']
+    if gene == 'ITS2':
+            gene_synonym = ['internal transcribed spacer 2', 'internal transcribed spacer 2, ITS2']
+
+
 
     gene_loc = fasta_soup.find("GBSeq_locus")
     gene_locus = gene_loc.contents[0]
@@ -418,7 +445,7 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
         for qualifier in qualifiers:
             if qualifier.GBQualifier_value is None:
                 continue
-            value= qualifier.GBQualifier_value.string
+            value = qualifier.GBQualifier_value.string
 
             # Check entire value for a match before individual words
             if value.upper()==gene.upper():
@@ -707,29 +734,21 @@ if __name__ == '__main__':
         geneList = literal_eval(sys.argv[2])  # i.e. [\'COX1\', \'ND2\',\'12S\',\'16S\',\'ND5\']
         #Check that genes are qualified geneList names, to avoid redundant DB entries
         for gene in geneList:
-            if gene.upper() == "COX1":
-                continue
-            if gene.upper() == "ND2":
-                continue
-            if gene.upper() == "12S":
-                continue
-            if gene.upper()== "16S":
-                continue
-            if gene.upper()=="ND5":
-                continue
-            if gene.upper()=="CYTB":
-                continue
-            if gene.upper()=="matK":
-                continue
-            if gene.upper()=="rbcL":
-                continue
-            else:
-                print "Please use one of the following gene names: ['COX1', 'CYTB' 'ND2','12S','16S','ND5']"
+            if gene.upper() == 'TRNG':
+                print(' If trnG is not available. Try trnS.')
+            if gene.upper() == "TRNL":
+                print('If trnL not available. Try rpl32 or trnT.')
+            if gene.upper() ==  'YCF6':
+                print('If ycf6 is not available, try trnC.')
+
+
 
     except IndexError:
         print "Using default gene list"
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
-        geneList = ['matK', 'rbcL']
+        # geneList = ['matK', 'rbcL']
+        # psbK-I
+        geneList = ['atpB', 'atpF', 'ndhF', 'psbA', 'rpl32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnE', 'trnG', 'trnH', 'trnK', 'trnS', 'trnT', 'trnY', 'ycf6', 'ITS1', 'ITS2']
 
     old_genus = None
     old_species = None

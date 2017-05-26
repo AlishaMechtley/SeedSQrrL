@@ -470,6 +470,7 @@ if __name__ == '__main__':
             taxonomy.update(temp_taxonomy)  # add everything else
             for rank, rank_value in taxonomy.items():
                 print("rank is " + str(rank) + " " + str(rank_value))
+
                 if rank_value is None:
                     continue
                 missing_gene = checkDb(rank, rank_value, gene)

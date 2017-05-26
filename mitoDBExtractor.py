@@ -260,9 +260,10 @@ if __name__ == '__main__':
 
     except IndexError:
         # print("please specify a filename")
-        print("using default filename")
+
         # sample_list = "Zaher18Samples.csv"
         sample_list = "SampleList.csv"
+        print("using default sampleList " + str(sample_list))
 
     try:
         single_seed = sys.argv[2]
@@ -296,14 +297,22 @@ if __name__ == '__main__':
             # if gene.upper()=="";
             #    continue
             else:
-                print("Please use one of the following gene names: ['COX1', 'ND2','12S','16S','ND5']")
+                print("Note that only following gene names have synonyms available: ['COX1', 'ND2','12S','16S','ND5', matK, rbcL]")
+                print("Please check the synonyms of your genes and make sure they are listed within the program.")
+
 
     except IndexError:
-        print("Using default gene list and no relative population in database")
+        print("Using default gene list")
+        #geneList = ['accD', 'atpB', 'ndhF', 'ndhJ', 'psbA', 'rpS4', 'rpL32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnC-ycf6 intergenic spacer', 'trnC-rpoB intergenic spacer', 'trnE', 'trnG', 'trnH', 'rpl32-trnL intergenic spacer region', 'trnK', 'trnL', 'trnS', 'trnS-trnG intergenic spacer', 'trnT-trnL intergenic spacer', 'trnT-trnL' 'trnY', 'ycf5', 'ycf6']
+        #geneList = ['accD', 'atpB', 'ndhF', 'ndhJ', 'psbA', 'rpoB', 'trnG', 'trnH', 'trnK', 'trnL', 'trnY', 'ycf6']
+        #geneList=['ITS1','ITS2','rpoB','rpoC1']
+        geneList = ['atpB', 'atpF', 'ndhF', 'psbA', 'rpl32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnE', 'trnG', 'trnH', 'trnK', 'trnS', 'trnT', 'trnY', 'ycf6', 'ITS1', 'ITS2']
+
+        #print geneList
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
         # populateRelatives = "No"
-        geneList = ['matK', 'rbcL']
-
+        #geneList = ['matK', 'rbcL']
+        #geneList = ['COX1', 'ITS', 'ITS1', 'ITS2']
 
     with open(sample_list, 'r') as sample:
         lines = sample.readlines()
@@ -340,7 +349,7 @@ if __name__ == '__main__':
                         genus = trans_genus
                         print(" translated " + str(species) + " to" + str(trans_species))
                         species = trans_species
-                        missing_gene_list, fasta_lines = checkDb(rank0, rankValue0, missing_gene_list)
+                        missing_gene_list, fasta_lines = checkDb(rank0, rankValue0, missinsg_gene_list)
                         if fasta_lines is not None:
                             fasta += fasta_lines
 
@@ -349,6 +358,7 @@ if __name__ == '__main__':
                 print("Checking genus for " + str(genus) + " " + str(species))
                 rankValue1 = genus
                 missing_gene_list, fasta_lines = checkDb(rank1, rankValue1, missing_gene_list)
+                print fasta_lines
                 if fasta_lines is not None:
                     fasta += fasta_lines  # Two lines appended, a header and a gene sequence (may be None)
                     # else:
@@ -358,7 +368,7 @@ if __name__ == '__main__':
                 # If genes remain to be found, find taxonomy and use relative for those genes
                 # AllOtherRank,Superkingdom,Kingdom,Superphylum,Phylum,Subphylum,Class,Superorder,Order,Suborder,Infraorder,Parvorder,Superfamily,Family,Subfamily = get_full_taxonomy(genus,species)
                 # ranks = [Subfamily, Family, Superfamily, Parvorder, Infraorder, Order, AllOtherRank, Superorder, Class, Subphylum, Phylum, SuperPhylum, Kingdom, SuperKingdom]
-
+                print (missing_gene_list)
                 temp_taxonomy = get_taxonomy(genus, species)
                 if temp_taxonomy is None:
                     print("####### No taxonomy for " + str(genus) + " " + str(species))
@@ -404,6 +414,7 @@ if __name__ == '__main__':
             else:  # missing_gene_list is None, species or Genus was present
                 # print("writing to file")
                 # filePrefix = genus + '_' + species
+                print "No genes Left"
                 if single_seed == "y":
                     f_out = open("./seeds/" + id + "_" + str(i) + ".seeds", 'w')
                     i = i + 1
