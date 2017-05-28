@@ -388,9 +388,9 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
     if gene == 'trnE':
         gene_synonym = ['trnE-trnY intergenic spacer']
     if gene == 'trnH':
-        gene_synonym = ["trnH-psbA intergenic spacer", 'trnH-psbA intergenic spacer region']
+        gene_synonym = ["trnH-psbA intergenic spacer", 'trnH-psbA intergenic spacer region', 'trnT-trnL intergenic spacer region']
     if gene == 'trnT':
-        gene_synonym = ["trnT-trnL", 'trnT-trnL intergenic spacer']
+        gene_synonym = ["trnT-trnL", 'trnT-trnL intergenic spacer', 'contains trnT-trnL intergenic spacer, trnL gene and trnL-trnF intergenic spacer sequences']
     if gene == 'trnS':
         gene_synonym = ["trnS-trnG intergenic spacer"]
     if gene == 'rpoB':
@@ -746,9 +746,7 @@ if __name__ == '__main__':
     except IndexError:
         print "Using default gene list"
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
-        geneList=['ITS1','ITS2','matK','rbcL']
-        # psbK-I
-        #geneList = ['atpB', 'atpF', 'ndhF', 'psbA', 'rpl32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnE', 'trnG', 'trnH', 'trnK', 'trnS', 'trnT', 'trnY', 'ycf6', 'ITS1', 'ITS2']
+        geneList = ['COX1', 'ITS1','ITS2','rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf6']
 
     old_genus = None
     old_species = None

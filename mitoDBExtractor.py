@@ -196,9 +196,9 @@ def get_taxonomy(genus, species=None):  # different return than DBMaker, uses di
         ("Superfamily", Superfamily),
         ("Parvorder", Parvorder),
         ("Infraorder", Infraorder),
-        ("Order", Order),
         ("Suborder", Suborder),
         # ("AllOtherRank", str(AllOtherRank)),
+        ("Order", Order),
         ("Superorder", Superorder),
         ("Sublass", Subclass),
         ("Class", Class),
@@ -298,21 +298,20 @@ if __name__ == '__main__':
             #    continue
             else:
                 print("Note that only following gene names have synonyms available: ['COX1', 'ND2','12S','16S','ND5', matK, rbcL]")
-                print("Please check the synonyms of your genes and make sure they are listed within the program.")
-
 
     except IndexError:
         print("Using default gene list")
-        #geneList = ['accD', 'atpB', 'ndhF', 'ndhJ', 'psbA', 'rpS4', 'rpL32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnC-ycf6 intergenic spacer', 'trnC-rpoB intergenic spacer', 'trnE', 'trnG', 'trnH', 'rpl32-trnL intergenic spacer region', 'trnK', 'trnL', 'trnS', 'trnS-trnG intergenic spacer', 'trnT-trnL intergenic spacer', 'trnT-trnL' 'trnY', 'ycf5', 'ycf6']
-        #geneList = ['accD', 'atpB', 'ndhF', 'ndhJ', 'psbA', 'rpoB', 'trnG', 'trnH', 'trnK', 'trnL', 'trnY', 'ycf6']
-        geneList=['ITS1','ITS2','matK','rbcL']
-        #geneList = ['atpB', 'atpF', 'ndhF', 'psbA', 'rpl32', 'rpoC1', 'rpoB', 'rps16', 'trnC', 'trnE', 'trnG', 'trnH', 'trnK', 'trnS', 'trnT', 'trnY', 'ycf6', 'ITS1', 'ITS2']
-
-        #print geneList
+        geneList = ['COX1', 'ITS1','ITS2','rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf6']
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
         # populateRelatives = "No"
-        #geneList = ['matK', 'rbcL']
-        #geneList = ['COX1', 'ITS', 'ITS1', 'ITS2']
+
+
+    try:
+        max_rank = sys.argv[4]
+
+    except IndexError:
+        max_rank = 'Class'
+        print("max rank is set to default: Class")
 
     with open(sample_list, 'r') as sample:
         lines = sample.readlines()
@@ -368,8 +367,8 @@ if __name__ == '__main__':
                 # If genes remain to be found, find taxonomy and use relative for those genes
                 # AllOtherRank,Superkingdom,Kingdom,Superphylum,Phylum,Subphylum,Class,Superorder,Order,Suborder,Infraorder,Parvorder,Superfamily,Family,Subfamily = get_full_taxonomy(genus,species)
                 # ranks = [Subfamily, Family, Superfamily, Parvorder, Infraorder, Order, AllOtherRank, Superorder, Class, Subphylum, Phylum, SuperPhylum, Kingdom, SuperKingdom]
-                print (missing_gene_list)
                 temp_taxonomy = get_taxonomy(genus, species)
+
                 if temp_taxonomy is None:
                     print("####### No taxonomy for " + str(genus) + " " + str(species))
                     temp_taxonomy = get_taxonomy(genus)
@@ -383,16 +382,15 @@ if __name__ == '__main__':
                                 print("update seed file manually above family level")
                             else:
                                 print("family found")
-                temp_taxonomy = taxonomy = OrderedDict([("Family", family)])
+                                temp_taxonomy = taxonomy = OrderedDict([("Family", family)])
 
-                # print(temp_taxonomy)
+                print(temp_taxonomy)
                 for rank, rankValue in temp_taxonomy.items():
-
                     if rankValue is None:
                         continue
                     else:
-                        print("iteration: " + str(rank) + " " + str(rankValue) + " " + str(
-                            missing_gene_list[0]) + " for " + str(genus) + " " + str(species))
+                        #print("iteration: " + str(rank) + " " + str(rankValue) + " " + str(
+                        #    missing_gene_list[0]) + " for " + str(genus) + " " + str(species))
                         missing_gene_list, fasta_lines = checkDb(rank, rankValue, missing_gene_list)
                         if fasta_lines is not None:
                             fasta += fasta_lines  # Two lines appended, a header and a gene sequence (may be None)
@@ -410,6 +408,15 @@ if __name__ == '__main__':
                             f_out.write(fasta)
                             f_out.close()
                             break
+
+                        else:
+                            print "rank is " + rank
+                            if rank == max_rank:
+                                print "no results found for gene " + missing_gene_list[0]
+                                missing_gene_list = missing_gene_list[1:]
+                                print 'missing gene list is now '
+                                print missing_gene_list
+
 
             else:  # missing_gene_list is None, species or Genus was present
                 # print("writing to file")

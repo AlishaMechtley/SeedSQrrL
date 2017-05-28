@@ -469,7 +469,7 @@ if __name__ == '__main__':
             # temp_taxonomy = get_taxonomy(family, " ")
             taxonomy.update(temp_taxonomy)  # add everything else
             for rank, rank_value in taxonomy.items():
-                print("rank is " + str(rank) + " " + str(rank_value))
+               # print("rank is " + str(rank) + " " + str(rank_value))
 
                 if rank_value is None:
                     continue
@@ -490,13 +490,13 @@ if __name__ == '__main__':
                         entry = None
                         if gi_ids is not None:
                             for gi_id in gi_ids:
-                                print("getting xml")
+                                #print("getting xml")
 
                                 xml = get_xml(rank_value, gene, gi_id)  # get the xml for that genus (rank)
                                 #print "xml is " + str(xml)
                                 if xml is not None:  # Genome present
                                     entry = get_gene_from_xml(xml, gene, dbConnection)
-                                    print("entry is: ", str(entry))
+                                    #print("entry is: ", str(entry))
 
                                     if entry is not None:  # successful entry
                                         break  # break from ids
