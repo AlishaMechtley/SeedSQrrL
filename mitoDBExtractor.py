@@ -301,7 +301,7 @@ if __name__ == '__main__':
 
     except IndexError:
         print("Using default gene list")
-        geneList = ['COX1', 'ITS1','ITS2','rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf6']
+        geneList = ['COX1', 'ITS1','ITS2','rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf1', 'ycf6']
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
         # populateRelatives = "No"
 
