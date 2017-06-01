@@ -383,6 +383,14 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
         gene_synonym = ['atpF-atpH intergenic spacer']
     if gene ==  'psbK':
         gene_synonym = ['psbK-psbI intergenic spacer']
+    if gene == "rbcL":
+        gene_synonym = ['rbcLa']
+    if gene == 'rpl32':
+        gene_synonym = ['rpl32-trnL(UAG) intergenic spacer','contains rpl32 gene (partial), rpl32-trnL IGS and trnL gene (partial)','contains rpl32 gene and rpl32-trnL intergenic spacer', 'rpl32-trnL intergenic spacer region']
+    if gene == 'rpoB':
+        gene_synonym = ['RNA polymerase beta subunit']
+    if gene == 'rpoC1':
+        gene_synonym = ['RNA polymerase C']
     if gene == 'trnC':
         gene_synonym = ['trnC-ycf6 intergenic spacer']
     if gene == 'trnE':
@@ -393,12 +401,6 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
         gene_synonym = ["trnT-trnL", 'trnT-trnL intergenic spacer', 'contains trnT-trnL intergenic spacer, trnL gene and trnL-trnF intergenic spacer sequences']
     if gene == 'trnS':
         gene_synonym = ["trnS-trnG intergenic spacer"]
-    if gene == 'rpoB':
-        gene_synonym = ['RNA polymerase beta subunit']
-    if gene == 'rpoC1':
-        gene_synonym = ['RNA polymerase C']
-    if gene == 'rpl32':
-        gene_synonym = ['rpl32-trnL(UAG) intergenic spacer','contains rpl32 gene (partial), rpl32-trnL IGS and trnL gene (partial)','contains rpl32 gene and rpl32-trnL intergenic spacer', 'rpl32-trnL intergenic spacer region']
     if gene == 'ITS1':
         gene_synonym = ['internal transcribed spacer 1', 'internal transcribed spacer 1, ITS1', 'sequence contains ITS1, 5.8S rRNA gene, ITS2']
     if gene == 'ITS2':
@@ -657,9 +659,6 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
 
     return "successful"
 
-
-
-
 def get_sequence(start, stop, full_sequence, is_complement = False):
 
     partial = False
@@ -746,7 +745,7 @@ if __name__ == '__main__':
     except IndexError:
         print "Using default gene list"
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
-        geneList = ['COX1', 'ITS1','ITS2','rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf6']
+        geneList = ['COX1', 'ITS1','ITS2','rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf1', 'ycf6']
 
     old_genus = None
     old_species = None
