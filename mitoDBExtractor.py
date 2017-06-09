@@ -335,8 +335,8 @@ if __name__ == '__main__':
         max_rank = sys.argv[4]
 
     except IndexError:
-        max_rank = 'Family'
-        print("max rank is set to default: Family")
+        max_rank = 'Order'
+        print("max rank is set to default: Order")
 
     with open(sample_list, 'r') as sample:
         lines = sample.readlines()
