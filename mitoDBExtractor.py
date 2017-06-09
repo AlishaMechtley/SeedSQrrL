@@ -52,8 +52,12 @@ def checkSynonyms(genus, species):
     return trans_genus, trans_species
 
 
-def get_taxonomy(genus, species=None):  # different return than DBMaker, uses dict; returns 3 fewer results
-    print "getting taxonomy"
+def get_taxonomy(rank_value, previous_rank_value):  # different return than DBMaker, uses dict; returns 3 fewer results
+    print("getting taxonomy for " +  rank_value + " " + previous_rank_value)
+    #print "rank_value is " + str(rank_value)
+    #print "previous_rank_value is " + str(previous_rank_value)
+
+
     # AllOtherRank=[]
     Superkingdom = None
     Kingdom = None
@@ -76,10 +80,9 @@ def get_taxonomy(genus, species=None):  # different return than DBMaker, uses di
     # get id from taxonomy database for specified genus and species
     #####################################################################
     # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=taxonomy&term=Eumetopias+jubatus
-    if species==None:
-        url = '/entrez/eutils/esearch.fcgi?db=taxonomy&term=' + str(genus) + '+' + str(species)
-    else:
-        url = '/entrez/eutils/esearch.fcgi?db=taxonomy&term=' + str(genus)
+    url = '/entrez/eutils/esearch.fcgi?db=taxonomy&term=' + str(rank_value) + '+' + str(previous_rank_value)
+
+   #print("taxonomy url is " + str(url))
     response = get_response(url)
     rData = response.read()
     id_soup = BeautifulSoup(rData, 'xml')
@@ -89,7 +92,7 @@ def get_taxonomy(genus, species=None):  # different return than DBMaker, uses di
         return
 
     if id_soup.eSearchResult is None or id_soup.eSearchResult.IdList.Id is None:
-        print("No id in taxonomy xml for: " + str(genus) + " " + str(species))
+        print("No id in taxonomy xml for: " + str(rank_value) + " " + str(previous_rank_value))
         return
 
     id = id_soup.eSearchResult.IdList.Id.string
@@ -108,12 +111,14 @@ def get_taxonomy(genus, species=None):  # different return than DBMaker, uses di
     ###################################################
 
     orgList = fastaSoup.find("ScientificName")  # start value in list format
+
     organism = orgList.contents[0]  # Genus species
+
     org_name = str(organism).split()
 
     Taxon = fastaSoup.find_all("Taxon")
 
-    if org_name[0] != genus:
+    if org_name[0] != rank_value and org_name[0] != previous_rank_value:
         correct_organism = False
         Synonyms = Taxon[0].find_all("Synonym")
         Synonyms += Taxon[0].find_all("GenbankSynonym")
@@ -121,18 +126,19 @@ def get_taxonomy(genus, species=None):  # different return than DBMaker, uses di
         for synonym in Synonyms:
             if synonym is None or synonym.string is None:
                 continue
-            if len(org_name) < 2:  # missing species name, genus only
-                # check for synonym
-                if genus in synonym.string:
-                    correct_organism = True
-                    break
-            else:
-                scientific_name = genus + " " + species
-                if scientific_name in synonym.string:
-                    correct_organism = True
-                    break
+
+            scientific_name = rank_value + " " + previous_rank_value
+            print( "scientific_name is " + str(scientific_name) + " " + ", synonym is " + str(synonym))
+            if scientific_name in synonym.string:
+                correct_organism = True
+                break
+            #elif rank_value in synonym.string:
+            #        correct_organism = True
+            #       break
+
+
         if correct_organism == False:
-            print("synonym not found for " + str(genus) + " " + str(species))
+            print("synonym not found for " + str(rank_value) + " " + str(previous_rank_value))
             return
 
     ###############################################
@@ -210,6 +216,7 @@ def get_taxonomy(genus, species=None):  # different return than DBMaker, uses di
 
 
 def checkDb(rank, rankValue, geneList):
+    print("checking database for " + rankValue)
     missing_gene_list = []
     cur = dbConnection.cursor()
     fasta = ""
@@ -301,17 +308,35 @@ if __name__ == '__main__':
 
     except IndexError:
         print("Using default gene list")
-        geneList = ['COX1', 'ITS1','ITS2','rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf1', 'ycf6']
+        #geneList = ['rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf1', 'ycf6', 'COX1', 'ITS1','ITS2']
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
+        #Plant Gene List
+        geneList = ['atpB', 'atpB+rbcL', 'atpE', 'matK', 'ndhF', 'psbA+trnH',
+                    'psbB', 'psbH', 'psbN', 'psbZ', 'psbZ+trnG',
+                    'rbcL', 'rpl16', 'rpl32+trnL', 'rpoC1', 'rps4', 'rps16', 'trnD+trnY', 'trnK+matK',
+                    'trnL+trnF', 'trnT+trnL', 'trnS+psbZ', 'ycf1', 'ITS1', 'ITS2']
+        '''
+        geneList = ['accD', 'atpA', 'atpB', 'atpE', 'atpF', 'cemA', 'clpP', 'ccsA', 'infA',
+                    'ndhA', 'ndhB', 'ndhC', 'ndhD', 'ndhE', 'ndhG', 'ndhH', 'ndhI', 'ndhF', 'ndhJ', 'ndhK',
+                    'matK', 'petA', 'petB', 'petD',
+                    'psaA', 'psaB', 'psaC', 'psaJ',
+                    'psbA', 'psbA+trnH',
+                    'psbB', 'psbC', 'psbD', 'psbE', 'psbF', 'psbH', 'psbH', 'psbK', 'psnL', 'psbN', 'psbT', 'psbZ',
+                    'rbcL', 'rbcLa', 'rpl2', 'rpl12', 'rpl14', 'rpl16', 'rpl20', 'rpl23', 'rpl33',
+                    'rpoC1', 'rpoC2', 'rpoA', 'rpoB', 'rpl2',
+                    'rps2', 'rps4', 'rps7', 'rps8', 'rps11', 'rps12', 'rps14', 'rps15', 'rps16', 'rps18', 'rps19',
+                    'rrn16', 'rrn23',
+                    'trnA', 'trnC', 'trnE', 'trnG', 'trnH', 'trnH+psbA', 'trnI','trnK', 'trnL', 'trnS', 'trnT', 'trnY',
+                    'ycf1', 'ycf2', 'ycf3', 'ycf4', 'ycf6', 'ITS1', 'ITS2']
         # populateRelatives = "No"
-
+        '''
 
     try:
         max_rank = sys.argv[4]
 
     except IndexError:
-        max_rank = 'Class'
-        print("max rank is set to default: Class")
+        max_rank = 'Family'
+        print("max rank is set to default: Family")
 
     with open(sample_list, 'r') as sample:
         lines = sample.readlines()
@@ -320,6 +345,7 @@ if __name__ == '__main__':
             # read in list of Genus species names
             # Get the genus and species name from comma delimited file (e.x. ZaherRaw.csv)
             # line = line.strip() #should not have any spaces
+            fasta_lines = None
             line = line.replace('\n', '')
             cells = line.split(',')
             id = cells[0]
@@ -331,68 +357,89 @@ if __name__ == '__main__':
             fasta = ""
             missing_gene_list = list(geneList)  # LISTS ARE MUTABLE
 
-            ##### Look for same subspecies in sqlite first????###
+
+
+            ##### To do: Look for same subspecies in sqlite first ###
+
             if species != "sp.":
-                rank0 = "Species"  # the rank as it appears in the Database
-                rankValue0 = species
-                missing_gene_list, fasta_lines = checkDb(rank0, rankValue0, missing_gene_list)
-                if fasta_lines is not None:
+                missing_gene_list, fasta_lines = checkDb("Species", species, missing_gene_list)
+
+                if len(fasta_lines) != 0:
+                    print("checkDB for species returned " + fasta_lines)
+                    print("for species " + species)
                     fasta += fasta_lines  # Two lines appended, a header and a gene sequence (may be None)
-                    # if populateRelatives=="yes" AND fasta_lines is None:
-                    # giIDs, trans_genus, trans_species = mitoDBmaker.get_ids(genus, species, subspecies, geneOrGenome)
                 else:
-                    # Check synonyms in DB, if exists then use reference name
+                    # Check synonyms in DB, if exists then use that name
                     trans_genus, trans_species = checkSynonyms(genus, species)
-                    if trans_genus is not None:
+                    if trans_species is not None and trans_species!=species:
                         print(" translated " + str(genus) + " to " + str(trans_genus))
                         genus = trans_genus
                         print(" translated " + str(species) + " to" + str(trans_species))
                         species = trans_species
-                        missing_gene_list, fasta_lines = checkDb(rank0, rankValue0, missing_gene_list)
-                        if fasta_lines is not None:
+                        missing_gene_list, fasta_lines = checkDb("Species", species, missing_gene_list)
+
+                        if len(fasta_lines) != 0:
+                            print("checkDB for trans_genus returned " + fasta_lines)
+                            print("for species " + species)
                             fasta += fasta_lines
+                        else:
+                            print("################# no value found in database for species " + species)
 
             if len(missing_gene_list) != 0:
-                rank1 = "Genus"  # the rank as it appears in the Database
-                print("Checking genus for " + str(genus) + " " + str(species))
-                rankValue1 = genus
-                missing_gene_list, fasta_lines = checkDb(rank1, rankValue1, missing_gene_list)
-                print fasta_lines
-                if fasta_lines is not None:
+                print("checking genus")
+                missing_gene_list, fasta_lines = checkDb("Genus", genus, missing_gene_list)
+                if len(fasta_lines) != 0:
+                    print("checkDB returned " + fasta_lines)
+                    print("for genus " + genus)
                     fasta += fasta_lines  # Two lines appended, a header and a gene sequence (may be None)
-                    # else:
-                    #    giIDs, transRankValue =  mitoDBRelativeMaker.get_ids(rankValue, gene)
+                else:
+                    print("################# no value found in database for genus " + genus)
 
             if len(missing_gene_list) != 0:  # No genus present, search for full taxonomy
                 # If genes remain to be found, find taxonomy and use relative for those genes
                 # AllOtherRank,Superkingdom,Kingdom,Superphylum,Phylum,Subphylum,Class,Superorder,Order,Suborder,Infraorder,Parvorder,Superfamily,Family,Subfamily = get_full_taxonomy(genus,species)
                 # ranks = [Subfamily, Family, Superfamily, Parvorder, Infraorder, Order, AllOtherRank, Superorder, Class, Subphylum, Phylum, SuperPhylum, Kingdom, SuperKingdom]
+                temp_taxonomy = None
+                taxonomy = OrderedDict([("Genus", genus)])  # add genus
+
                 temp_taxonomy = get_taxonomy(genus, species)
 
                 if temp_taxonomy is None:
                     print("####### No taxonomy for " + str(genus) + " " + str(species))
-                    temp_taxonomy = get_taxonomy(genus)
-                    if temp_taxonomy is None:
-                        print("## No taxonomy for " + str(genus))
-                        if temp_taxonomy is None:
-                            temp_taxonomy = get_taxonomy(family)
-                            if temp_taxonomy is None:
-                                print("No taxonomy for " + str(family) + " " + str(genus) + " " + str(species))
-                                temp_taxonomy = taxonomy = OrderedDict([("Family", family)])
-                                print("update seed file manually above family level")
-                            else:
-                                print("family found")
-                                temp_taxonomy = taxonomy = OrderedDict([("Family", family)])
+                    temp_taxonomy = get_taxonomy(family, genus)
 
-                print(temp_taxonomy)
-                for rank, rankValue in temp_taxonomy.items():
+                    if temp_taxonomy is None:
+                        print("###########No taxonomy for " + str(family) + " " + str(genus))
+                        temp_taxonomy = get_taxonomy(family, "")
+
+                        if temp_taxonomy is None:
+                            print("################No taxonomy for " + str(family) )
+                            print("Can not search above family level for " + family + " " + genus + " " + species)
+                            temp_taxonomy = OrderedDict([("Family", family)])
+
+
+
+                taxonomy.update(temp_taxonomy)  # add everything else
+
+                print("Taxonomy is " + str(taxonomy))
+
+                for rank, rankValue in taxonomy.items():
+
+                    if rank == max_rank:
+                        print "max rank reached, no result for gene " + missing_gene_list[0]
+                        print "missing gene list was " + missing_gene_list
+                        missing_gene_list = missing_gene_list[1:]
+                        print "missing gene list is now " + missing_gene_list
+
+
                     if rankValue is None:
                         continue
                     else:
-                        #print("iteration: " + str(rank) + " " + str(rankValue) + " " + str(
-                        #    missing_gene_list[0]) + " for " + str(genus) + " " + str(species))
                         missing_gene_list, fasta_lines = checkDb(rank, rankValue, missing_gene_list)
-                        if fasta_lines is not None:
+                        if len(fasta_lines) != 0:
+                            print("length of fasta_lines is " + str(len(fasta_lines)))
+                            print("checkDB returned " + fasta_lines)
+                            print("for rank " + rank + " and rankValue " + rankValue)
                             fasta += fasta_lines  # Two lines appended, a header and a gene sequence (may be None)
 
                         if len(missing_gene_list) == 0:
@@ -408,14 +455,6 @@ if __name__ == '__main__':
                             f_out.write(fasta)
                             f_out.close()
                             break
-
-                        else:
-                            print "rank is " + rank
-                            if rank == max_rank:
-                                print "no results found for gene " + missing_gene_list[0]
-                                missing_gene_list = missing_gene_list[1:]
-                                print 'missing gene list is now '
-                                print missing_gene_list
 
 
             else:  # missing_gene_list is None, species or Genus was present

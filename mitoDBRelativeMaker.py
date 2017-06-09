@@ -21,14 +21,15 @@ lastRequestTime = 0
 def get_ids(rank_value, gene):
     global lastRequestTime
 
+
     #############################################################
     # get the GenBank accession number via esearch, ex 256557273
     #############################################################
     # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=nuccore&term=Atractaspis+bibronii+COX1
     # Note: check that if subspecies isn't found, still finds species
 
-    url = '/entrez/eutils/esearch.fcgi?db=nuccore&term=' + rank_value + '+' + gene
-    print "url is" + str(url)
+    url = '/entrez/eutils/esearch.fcgi?db=nuccore&term=' + rank_value + '+' + previous_rank_value + '+' + gene
+    #print("url is " + url)
 
     time_since_last_request = time.time() - lastRequestTime
     if time_since_last_request < 0.3:
@@ -40,6 +41,23 @@ def get_ids(rank_value, gene):
     giSoup = BeautifulSoup(rData, 'xml')
 
     giIdList = giSoup.IdList
+
+    if giIdList.Id is None:
+        url = '/entrez/eutils/esearch.fcgi?db=nuccore&term=' + rank_value + '+' + gene
+        #print("url is " + url)
+
+        time_since_last_request = time.time() - lastRequestTime
+        if time_since_last_request < 0.3:
+            time.sleep(0.3 - time_since_last_request)
+        response = get_response(url)
+        lastRequestTime = time.time()
+
+        rData = response.read()
+        giSoup = BeautifulSoup(rData, 'xml')
+
+        giIdList = giSoup.IdList
+
+
     translationSet = giSoup.TranslationSet.Translation
 
     if translationSet is None:  # Genus not found, same geneOrGenome returned
@@ -50,26 +68,30 @@ def get_ids(rank_value, gene):
     translation = translationString.split('"')
     translation = translation[1].split(' ')
     # How does this translation work for genus, family, etc?
-    if len(translation) == 1:
+    if len(translation) == 2 or len(translation) == 1 :
         transRankValue = translation[0]
 
     else:
         print("		Improper query translation " + str(translation) + "for " + str(rank_value) + " " + str(gene))
         return None, None
 
-    if giIdList.Id is None:  # No id returned for gene but name translation available
+    if giIdList.Id is None:
+        #print("No id returned for gene but name translation available")
         return None, transRankValue
 
     # giIDs = giSoup.IdList.Id.string #only returns first id
     giIdList = giSoup.IdList
     giIDs = giIdList.find_all("Id")  # return a list of IDs
     giIDs = [giId.string for giId in giIDs]
+
+
     return giIDs, transRankValue  # returns "translated" rank Value, for subfamily level and higher
 
 
 def checkDb(rank, rankValue, gene):
     cur = dbConnection.cursor()
     missing_gene = False
+    print("Checking database for " + rankValue + " " + gene)
 
     # returns one row, assumes cellCount=24 but this will change if attributes change
     # may want to check partial flag and only accept complete references at some point?
@@ -137,7 +159,6 @@ def checkDb(rank, rankValue, gene):
 
 def get_xml(rank_value, gene_or_genome, giID):
     global lastRequestTime
-    is_tax_correct = False
     ####################################################
     # get sequence for specified gene or genome
     ####################################################
@@ -145,8 +166,10 @@ def get_xml(rank_value, gene_or_genome, giID):
     # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=39753676&retmode=xml
     # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=440579124&retmode=xml
 
-    url = '/entrez/eutils/efetch.fcgi?db=nuccore&id=' + str(giID) + '&retmode=xml'
-    print("searching entrez for " + str(rank_value) + " " + str(gene_or_genome))
+    ############## save last rank value globally and check both ####################
+
+    url = '/entrez/eutils/efetch.fcgi?db=nuccore&id=' + str(giID) +  '&retmode=xml'
+    #print("searching entrez for " + str(rank_value) + " " + str(gene_or_genome))
 
     time_since_last_request = time.time() - lastRequestTime
     if time_since_last_request < 0.3:
@@ -163,12 +186,15 @@ def get_xml(rank_value, gene_or_genome, giID):
     org_list = fasta_soup.find("GBSeq_taxonomy")
     # print "full organism name is " + str(org_list)
     taxonomy_list = org_list.contents[0]  # Genus species
-    if rank_value in taxonomy_list:
-        is_tax_correct = True
 
-    if is_tax_correct == False:
+    ###############################################################################################################
+    #The next line will not work. Find a way to go up one level in taxonomy and check that instead.
+    #################if rank_value not in taxonomy_list and previous_rank_value not in taxonomy_list:#############
+    ###################################################################################################
+
+    if rank_value not in taxonomy_list and previous_rank_value not in taxonomy_list:
         ##### organism is incorrect ####
-        print(str(rank_value) + " not found in " + str(taxonomy_list) + ' for ' + str(gene_or_genome))
+        print(str(previous_rank_value) + " and " + str(rank_value) + " not found in " + str(taxonomy_list) + ' for ' + str(gene_or_genome)) + ' ' + str(giID)
         return None  # means it failed
 
     return fasta_soup
@@ -407,7 +433,6 @@ def get_gene_from_xml(fasta_soup, gene, db_connection):  # fasta_Soup is an obje
 """
 
 if __name__ == '__main__':
-
     #create an "old taxonomy" so that we don't have to search for the taxonomy every time
     old_genus = None
     old_gene = None
@@ -418,6 +443,14 @@ if __name__ == '__main__':
         # print "please specify a filename"
         print("Using default sample list.")
         sample_list = "SampleListNeedReference.csv"
+
+
+    try:
+        max_rank = sys.argv[2]
+
+    except IndexError:
+        max_rank = 'Order'
+        print("max rank is set to default: Order")
 
     with open(sample_list, 'r') as sample:
         lines = sample.readlines()
@@ -433,16 +466,16 @@ if __name__ == '__main__':
             species = cells[4]
             # genus = cells[2]
             # species = cells[3]
-
-            print "searching for " + str(genus) + " " + str(gene)
+            previous_rank_value = species
+            #print "searching for " + str(genus) + " " + str(gene)
             if genus == old_genus and gene == old_gene:
                 continue
-            ########################################################
-            ############## check for genus first ###################
-            ########################################################
-            # We already know the gene for this species is not in the database
-            # since this uses an output file from MitoDBmaker
-            # best to start with full genome of relative of same genus, but will disregard for now
+
+            #############################################################################################
+            ############## if genus == last genus, taxonomy = last taxonomy!!!!!!!!!! ###################
+            #############################################################################################
+            ############## best to start with full genome of relative of same genus!! ###################
+            #############################################################################################
 
             # missing_gene = checkDb("Genus", genus, gene)
 
@@ -453,23 +486,45 @@ if __name__ == '__main__':
                 print(" translated " + str(species) + " to" + str(trans_species))
                 species = trans_species
 
-            taxonomy = OrderedDict([("Genus", genus)])  # add genus
-            print("taxonomy is")
-            print OrderedDict
-            temp_taxonomy = get_taxonomy(genus, species)
-            if temp_taxonomy is None:
-                print("No taxonomy for " + str(genus))
-                temp_taxonomy = get_taxonomy(family, " ")
+            if genus== old_genus and species == old_species:
+                old_taxonomy = taxonomy
 
+            else:
+                temp_taxonomy = None
+                taxonomy = OrderedDict([("Genus", genus)])  # add genus
+                temp_taxonomy = get_taxonomy(genus, species)
                 if temp_taxonomy is None:
-                    print("No taxonomy for " + str(family))
-                else:
-                    print("family found")
+                    print("No taxonomy for " + str(genus) + ' ' + str(species))
+                    temp_taxonomy = get_taxonomy(family, genus)
 
-            # temp_taxonomy = get_taxonomy(family, " ")
-            taxonomy.update(temp_taxonomy)  # add everything else
+                    if temp_taxonomy is None:
+                        print("No taxonomy for " + str(family) + ' ' + str(genus))
+                        #try genus by itself
+                        temp_taxonomy = get_taxonomy(genus, '')
+
+                        if temp_taxonomy is not None:
+                            print("##################### GENUS WORKED BY ITSELF !!!!!!!!!!!!!!!!)")
+
+                            #try family by itself
+                        else:
+                            temp_taxonomy = get_taxonomy(family, '')
+
+                            if temp_taxonomy is not None:
+                                print("##################### FAMILY WORKED BY ITSELF !!!!!!!!!!!!!!!!)")
+
+
+
+                # temp_taxonomy = get_taxonomy(family, " ")
+                taxonomy.update(temp_taxonomy)  # add everything else
+
+            #print("Taxonomy is " + str(temp_taxonomy) )
+
+
             for rank, rank_value in taxonomy.items():
                # print("rank is " + str(rank) + " " + str(rank_value))
+                if rank == max_rank:
+                    print("max rank reached, no result for  " + gene)
+                    break
 
                 if rank_value is None:
                     continue
@@ -478,19 +533,18 @@ if __name__ == '__main__':
                 if missing_gene:  # still missing, search NCBI for gene
                     # gi_ids, translated_genus = get_ids(genus, gene)
                     gi_ids, translated_rank_value = get_ids(rank_value, gene)
-                    print("getting ids")
 
-                    if translated_rank_value is None or translated_rank_value != rank_value:
+                    if translated_rank_value is None or (translated_rank_value != rank_value and translated_rank_value != previous_rank_value):
                         print(" Improper value returned: " + str(translated_rank_value) + " for " + str(rank_value))
-                        # Will the translated_rank_value ever be None? - yes
-                        continue  # up to next rank
+                        previous_rank_value = rank_value
+                        continue
 
-                    else:  # we have the correct Genus (or rank)
-                        print("have correct rank")
+                    else: # we have the correct Genus (or rank)
+
                         entry = None
                         if gi_ids is not None:
                             for gi_id in gi_ids:
-                                #print("getting xml")
+                                print("getting xml")
 
                                 xml = get_xml(rank_value, gene, gi_id)  # get the xml for that genus (rank)
                                 #print "xml is " + str(xml)
@@ -498,7 +552,8 @@ if __name__ == '__main__':
                                     entry = get_gene_from_xml(xml, gene, dbConnection)
                                     #print("entry is: ", str(entry))
 
-                                    if entry is not None:  # successful entry
+                                    if entry is not None:
+                                        # print("# successful entry")
                                         break  # break from ids
 
                                     else:
@@ -506,10 +561,15 @@ if __name__ == '__main__':
                                         print("gene name doesn't match or gene location not given in xml")
                                         # goes to the next gi_id
 
+                        previous_rank_value = rank_value
+
                     if entry is not None:
+                        print("entry was successful, break out of rank loop")
                         break  # entry was successful, break out of rank loop
-                else:  #
+                else:
                     print"Gene already found in DB for that organism, continuing onto next sample"
                     break
             old_genus = genus
+            old_species = species
             old_gene = gene
+            old_taxonomy = taxonomy

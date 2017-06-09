@@ -58,6 +58,7 @@ def get_ids(genus, species, subspecies, gene_or_genome):
         url = '/entrez/eutils/esearch.fcgi?db=nuccore&term={}+{}+{}'.format(
             urllib.quote(genus), urllib.quote(species), urllib.quote(gene_or_genome))
 
+    #print("searching for " + gene_or_genome + " giID " + url)
     #NCBI requires a .3 second delay between requests
     time_since_last_request = time.time()-lastRequestTime
     if time_since_last_request<0.3:
@@ -80,7 +81,7 @@ def get_ids(genus, species, subspecies, gene_or_genome):
     translation_set = gi_soup.TranslationSet.Translation
 
     if translation_set is None:  # Genus not found, same gene_or_genome returned
-        print "########## species not found for " + str(genus) + " " + str(species) + " " + str(gene_or_genome)
+        print "########## No result returned for " + str(genus) + " " + str(species) + " " + str(gene_or_genome)
         return None, None, None
 
     translation_string = translation_set.To.string
@@ -88,8 +89,8 @@ def get_ids(genus, species, subspecies, gene_or_genome):
     translation = translation[1].split(' ')
 
     if len(translation) == 1:  # does not return genus and species names, only genus
-        print "species not available for " + " ".join(translation) + " for " + str(genus) + " " + str(species) + " " +\
-              str(gene_or_genome)
+        #print(" species " + species + " not available")
+
         return None, None, None
 
     else:
@@ -97,8 +98,9 @@ def get_ids(genus, species, subspecies, gene_or_genome):
         trans_species = translation[1]
 
     if gi_id_list.Id is None:  # No id returned for gene_or_genome but name translation available
-        print "########## No gi id for " + str(genus) + " " + str(species) + " " + \
-              str(gene_or_genome) + " trans_genus is " + trans_genus + " trans_species is " + trans_species
+        print "########## No giID for " + str(genus) + " " + str(species) + " " + \
+              str(gene_or_genome)
+        #print(" trans_genus is " + trans_genus + " and trans_species is " + trans_species)
         return None, trans_genus, trans_species
 
     # giIDs = gi_soup.IdList.Id.string #only returns first id
@@ -163,7 +165,7 @@ def get_full_taxonomy(genus, species):
         url = '/entrez/eutils/esearch.fcgi?db=taxonomy&term=' + genus + '+' + species
     else:
         url = '/entrez/eutils/esearch.fcgi?db=taxonomy&term=' + genus
-    print("###############URL IS : " + str(url))
+    print("searching for taxonomy " + url)
 
 
     time_since_last_request = time.time()-lastRequestTime
@@ -180,7 +182,7 @@ def get_full_taxonomy(genus, species):
         return
 
     if id_soup.eSearchResult.IdList.Id is None:
-        print "No id in taxonomy xml for: " + str(genus) + " " + str(species)
+        print "Notaxonomy id for: " + str(genus) + " " + str(species)
         return
 
     id = id_soup.eSearchResult.IdList.Id.string
@@ -190,6 +192,8 @@ def get_full_taxonomy(genus, species):
     #####################################################
     # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&id=241197&retmode=xml
     url = '/entrez/eutils/efetch.fcgi?db=taxonomy&id=' + id + '&retmode=xml'
+    print("Getting taxonomy xml " + str(url))
+
     time_since_last_request = time.time()-lastRequestTime
     if time_since_last_request < 0.3:
         time.sleep(0.3-time_since_last_request)
@@ -229,8 +233,10 @@ def get_full_taxonomy(genus, species):
                     if scientific_name in synonym.string:
                         correct_organism = True
                         break
+                    else:
+                        print(scientific_name + " not found in " + synonym)
             if correct_organism == False:
-                print "synonym not found for " + str(genus) + " " + str(species)
+                print "No synonym found for " + str(genus) + " " + str(species)
                 return
 
 
@@ -299,7 +305,9 @@ def getXML(genus, species, gene_or_genome, giID):
     # get sequence for specified gene or genome
     ####################################################
     # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=1043616945&retmode=xml
-    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=104360349&retmode=xml
+    # http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=664680423&retmode=xml
+
+    print(" getting sequence from " + giID + " xml")
 
     url = '/entrez/eutils/efetch.fcgi?db=nuccore&id=' + giID + '&retmode=xml'
 
@@ -319,7 +327,6 @@ def getXML(genus, species, gene_or_genome, giID):
     # print "full organism name is " + str(org_list)
     organism = org_list.contents[0]  # Genus species
     org_name = str(organism).split()
-    print organism
 
     if genus != org_name[0] or species != org_name[1]:
         ##### check first two words of organism in case there is a subspecies listed ####
@@ -332,7 +339,8 @@ def getXML(genus, species, gene_or_genome, giID):
         geneLoc = fasta_soup.find("GBSeq_locus")
         geneLocus = geneLoc.contents[0]
         geneLocus = geneLocus.upper()  # accession number can be written in upper- or lowercase
-        if geneLocus.startswith('NC') is False:  # not a chromosome from RefSeq, could also start with EU?
+        if geneLocus.startswith('NC') is False:
+            print("geneLocus " + geneLocus + " is not a chromosome from RefSeq, Does it start with EU?")
             return None, None
 
     if len(org_name)>2:
@@ -348,7 +356,10 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
     # matching ratio is too high when comparing "NADH 1" and "NADH 2",
     # so must use exact match for longer words
     # Lists originally taken from http://www.genecards.org/ which has multiple sources including HUGO
+
+
     gene_synonym = None
+    '''
     if gene =="COX1":
         gene_synonym = ["CO1", "COI", "COXI", "Cytochrome C Oxidase I",
         "Cytochrome C Oxidase Subunit I", "MTCO1",
@@ -379,32 +390,117 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
         "Mitochondrially Encoded NADH Dehydrogenase 5", 
         "NADH Dehydrogenase, Subunit 5 (Complex I)", "NADH-Ubiquinone Oxidoreductase Chain 5",
         "Complex I ND5 Subunit","NADH Dehydrogenase 5","NADH5"]
-    if gene == 'atpF':
-        gene_synonym = ['atpF-atpH intergenic spacer']
-    if gene ==  'psbK':
-        gene_synonym = ['psbK-psbI intergenic spacer']
-    if gene == "rbcL":
-        gene_synonym = ['rbcLa']
-    if gene == 'rpl32':
-        gene_synonym = ['rpl32-trnL(UAG) intergenic spacer','contains rpl32 gene (partial), rpl32-trnL IGS and trnL gene (partial)','contains rpl32 gene and rpl32-trnL intergenic spacer', 'rpl32-trnL intergenic spacer region']
+    '''
     if gene == 'rpoB':
         gene_synonym = ['RNA polymerase beta subunit']
     if gene == 'rpoC1':
         gene_synonym = ['RNA polymerase C']
     if gene == 'trnC':
-        gene_synonym = ['trnC-ycf6 intergenic spacer']
+        gene_synonym = ['trnC(gca)']
+    if gene == 'trnG':
+        gene_synonym = ['tRNA-Gly', 'tRNA-Gly (trnG)']
     if gene == 'trnE':
-        gene_synonym = ['trnE-trnY intergenic spacer']
+        gene_synonym = ['tRNA-Glu (trnE)']
     if gene == 'trnH':
-        gene_synonym = ["trnH-psbA intergenic spacer", 'trnH-psbA intergenic spacer region', 'trnT-trnL intergenic spacer region']
-    if gene == 'trnT':
-        gene_synonym = ["trnT-trnL", 'trnT-trnL intergenic spacer', 'contains trnT-trnL intergenic spacer, trnL gene and trnL-trnF intergenic spacer sequences']
+        gene_synonym = ["tRNA-His"]
+    if gene == 'trnK':
+        gene_synonym = ['trnK-UUU', 'trnK(ctt)']
+    if gene == 'trnL':
+        gene_synonym = ['trnL(UAA)']
     if gene == 'trnS':
-        gene_synonym = ["trnS-trnG intergenic spacer"]
+        gene_synonym = ['trnS-GCU', 'trnS-GGA']
     if gene == 'ITS1':
-        gene_synonym = ['internal transcribed spacer 1', 'internal transcribed spacer 1, ITS1', 'sequence contains ITS1, 5.8S rRNA gene, ITS2']
+        gene_synonym = ['internal transcribed spacer 1', 'internal transcribed spacer 1, ITS1']
     if gene == 'ITS2':
         gene_synonym = ['internal transcribed spacer 2', 'internal transcribed spacer 2, ITS2']
+    if gene == 'ITS':
+        gene_synonym = ['sequence contains ITS1, 5.8S rRNA gene, ITS2', 'sequence contains 18S rRNA gene, ITS1, 5.8S rRNA gene, ITS2, 28S rRNA gene']
+
+    if gene == 'atpB+rbcL':
+        gene_synonym = ['atpB-rbcL', 'atpB-rbcL intergenic spacer']
+    if gene == 'atpF+atpH':
+        gene_synonym = ['atpF-atpH', 'atpF-atpH intergenic spacer']
+    if gene == 'ndhF+rpl32':
+        gene_synonym = ['ndhF-rpl32', 'ndhF-rpl32 intergenic spacer']
+    if gene == 'ndhJ+trnC':
+        gene_synonym = ['ndhJ-trnC','ndhJ-trnC intergenic spacer']
+    if gene == 'psbA+trnH':
+        gene_synonym = ['psbA-trnH', 'psbA-trnH intergenic spacer', 'psbA-trnH intergenic spacer region'
+                        'contains portions of discontiguous regions including ribosomal protein L16 (rpl16) intron, psbA-trnH intergenic spacer, and trnC-ycf6 intergenic spacer'
+                        'psbA-trnH intergenic spacer; may also contain tRNA-His (trnH)']
+    if gene == 'psbD+trnT':
+        gene_synonym = ['psbD-trnT', 'psbD-trnT intergenic spacer']
+    if gene == 'psbK+psbI':
+        gene_synonym = ['psbK-psbI', 'psbK-psbI intergenic spacer', 'contains psbK-psbI intergenic spacer']
+    if gene== 'psbZ+trnG':
+        gene_synonym = ['psbZ-trnG','psbZ-trnG intergenic spacer and tRNA-Gly',
+                        'contains psbZ-trnG intergenic spacer and tRNA-Gly']
+
+    if gene == 'rpl32+trnL':
+        gene_synonym = ['rpl32-trnL', 'contains rpl32 gene (partial)', 'rpl32-trnL(UAG) intergenic spacer'
+                        'rpl32-trnL IGS and trnL gene (partial)',
+                        'contains rpl32 gene and rpl32-trnL intergenic spacer',
+                        'contains rpl32, rpl32-trnL intergenic spacer and tRNA-Leu',
+                        'rpl32-trnL intergenic spacer','rpl32-trnL intergenic spacer region']
+
+
+
+    if gene == 'rp132+ndhF':
+        gene_synonym = ['rp132-ndhF','rpl32-ndhF intergenic spacer']
+    if gene == 'rpoB+trnC':
+        gene_synonym = ['rpoB-trnC', 'rpoB-trnC intergenic spacer']
+    if gene == 'rps4+trnS':
+        gene_synonym = ['rps4-trnS', 'rps4-trnS intergenic spacer (trnS-GGA)']
+    if gene == 'rps16+trnQ':
+        gene_synonym = ['rps16-trnQ', 'rps16-trnQ intergenic spacer region']
+    if gene == 'rps16+trnK':
+        gene_synonym = ['rps16-trnK', 'rps16-trnK intergenic spacer']
+    if gene == 'trnC+ycf6':
+        gene_synonym = ['trnC-ycf6','trnC-ycf6 intergenic spacer', 'trnC-yCf6 intergenic spacer region',
+                        ' tRNA-Cys (trnC) and trnC-ycf6', 'tRNA-Cys (trnC) and trnC-ycf6 intergenic spacer']
+    if gene== 'trnC+petN':
+        gene_synonym = ['trnC-petN', 'trnC-petN intergenic spacer, IGS', 'trnC-petN intergenic spacer']
+    if gene == 'trnD+trnT':
+        gene_synonym = ['trnD-trnT', 'trnD-trnT intergenic spacer']
+    if gene == 'trnD+trnY':
+        gene_synonym == ['trnD-trnY', 'contains tRNA-Asp (trnD), trnD-trnY intergenic spacer, tRNA-Tyr (trnY), trnY-trnE intergenic spacer, tRNA-Glu (trnE), trnE-trnT intergenic spacer, and tRNA-Thr (trnT)']
+
+    if gene == 'trnE+trnT':
+        gene_synonym = ['trnE-trnT','trnE-trnT intergenic spacer', 'chloroplast marker trnET; chloroplast trnE/trnT intergenic region',
+                        'tRNA-Asp (trnD), trnD-trnY intergenic spacer, tRNA-Tyr (trnY), trnY-trnE intergenic spacer, tRNA-Glu (trnE), trnE-trnT intergenic spacer, and tRNA-Thr (trnT)']
+    if gene == 'trnE+trnY':
+        gene_synonym =  ['trnE-trnY', 'trnE-trnY intergenic spacer',
+                         'trnD-trnY intergenic spacer, tRNA-Tyr (trnY), trnY-trnE intergenic spacer, tRNA-Glu (trnE), trnE-trnT intergenic spacer, and tRNA-Thr (trnT)']
+    if gene == 'trnG+trnS':
+        gene_synonym = ['trnG-trnS','trnG-trnG intergenic spacer',
+                        'tRNA-Gly (trnG) gene and trnG-trnS intergenic spacer']
+
+    if gene == 'trnH+psbA':
+        gene_synonym = ['trnH-psbA', 'trnH-psbA intergenic spacer', 'trnH-psbA intergenic spacer region']
+    if gene == 'trnK+matK':
+        gene_synonym= ['trnK-matK intergenic spacer']
+
+    if gene == 'trnL+trnF':
+        gene_synonym = ['trnL-trnF','contains tRNA-Leu, trnL-trnF intergenic spacer and tRNA-Phe', 'tRNA-Leu', 'trnL-trnF intergenic spacer', 'contains tRNA-Leu (trnL) and trnL-trnF intergenic spacer'
+                        'contains tRNA-Leu (trnL), trnL-trnF intergenic spacer, and tRNA-Phe (trnF)']
+    if gene == 'trnQ+rps16':
+        gene_synonym = ['trnQ-rps16','trnQ(UUG)-rps16 intergenic spacer']
+    if gene == 'trnS+psbZ':
+        gene_synonym =  ['trnS-psbZ', 'tRNA-Ser and trnS-psbZ intergenic spacer', 'contains tRNA-Ser and trnS-psbZ intergenic spacer']
+    if gene == 'trnS+trnfM':
+        gene_synonym = ['trnS-trnfM', 'trnS-trnfM intergenic spacer']
+    if gene == 'trnS+trnG':
+        gene_synonym= ['trnS-trnG', 'trnS-trnG intergenic spacer', 'trnS-trnG intergenic spacer region', 'tRNA-Ser (trnS), trnS-trnG intergenic spacer and tRNA-Gly (trnG)']
+    if gene == 'trnT+trnL':
+        gene_synonym = ['trnT-trnL', 'trnT-trnL', 'trnT-trnL intergenic spacer', 'trnT-trnL intergenic spacer region',
+                        'trnT-trnF intergenic spacer region', 'trnT(UGU)-trnL(UAA) intergenic spacer', 'contains trnT-trnL intergenic spacer, trnL gene and trnL-trnF intergenic spacer sequences', 'trnT-trnL intergenic spacer, tRNA-Leu gene, and trnL-trnF intergenic spacer', 'contains trnT-trnL intergenic spacer, tRNA-Leu (trnL), trnL-trnF intergenic spacer, and tRNA-Phe (trnF)']
+    if gene == 'trnY+trnE':
+        gene_synonym = ['trnY-trnE', 'trnY-trnE intergenic spacer','trnD, trnY, trnE, and trnE-trnT intergenic spacer region']
+    if gene == 'ycf6+psbM':
+        gene_synonym = ['ycf6-psbM', 'ycf6-psbM intergenic spacer']
+    if gene == 'ycf6+trnC':
+        gene_synonym = ['ycf6-trnC','ycf6-trnC-GCA intergenic spacer']
+
 
 
 
@@ -434,12 +530,16 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
     full_sequence = seqList.contents[0]  # full sequence
 
     # Find closest match to gene we are looking for
+    exact_match_found = False
     best_match = 0  # Start with no match, search for best
     best_feature = None
     best_word = None
+
     features = fasta_soup.find_all("GBFeature")
 
     for feat in features:
+        if exact_match_found == True:
+            break
         if feat.GBFeature_quals is None:
             continue
         # qualifiers = feat.GBFeature_quals.GBQualifier only finds first
@@ -448,20 +548,24 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
             if qualifier.GBQualifier_value is None:
                 continue
             value = qualifier.GBQualifier_value.string
-
+            #Sprint("value is " + value)
             # Check entire value for a match before individual words
             if value.upper()==gene.upper():
+                print(" ##### exact match #### " + str(gene))
+                exact_match_found=True
                 best_match = 1.0
                 best_feature = feat
                 best_word = value
                 break
+
             if gene_synonym is not None:  # look for exact match of synonym
+                #print(value.upper() + " did not match " + gene.upper())
                 for syn in gene_synonym:
                     if value.upper() == syn.upper():
                             best_match = 1.0
                             best_feature = feat
                             best_word = value
-                            # print "##### gene synonym match ####" + str(syn)
+                            print "##### gene synonym match #### " + str(syn)
                             break  # want to break out of outer loop, make function?
 
             # for each word in value
@@ -490,7 +594,7 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
     gene_match = best_feature.GBFeature_quals.GBQualifier.GBQualifier_value.string
 
     if 1 > best_match > 0.8:  # else below (prints closest) or perfect match (no print)
-        print "closest match for " + gene + " is " + best_word
+        print "closest match for " + gene + " is " + str(gene_match)
 
     if best_match <= 0.8:
         # print "############### No close match: " + str(best_word)
@@ -499,7 +603,6 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
               + str(species) + ' ' + str(gene_locus)
 
         return None
-
 
     # get start and stop
     location = best_feature.GBFeature_location.string
@@ -519,7 +622,7 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
         # retrieve location(start and stop) for each section and determine the number of nucleotides between (intron)
         i=0
         old_stop=0
-        print("locations are " + str(locations))
+        #print("locations are " + str(locations))
         for loc in locations:
             start, stop = loc.split("..")
             start, stop, exon, partial = get_sequence(start, stop, full_sequence, is_complement)
@@ -620,7 +723,7 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
         return None
 
     if rowcount>0:  # update
-        print "updating table for " + str(genus_species) + ' ' + str(gene)
+        print "updating table for " + str(genus_species[0]) + ' ' + str(genus_species[1]) + ' ' + str(gene)
         #print get_full_taxonomy(genus, species)
         AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Subclass, Superorder, Order, Suborder, \
         Infraorder, Parvorder, Superfamily, Family, Subfamily, Tribe = get_full_taxonomy(genus, species)
@@ -640,13 +743,17 @@ def get_gene_from_xml(fasta_soup, gene, db_connection, subspecies=None):  # fast
                              species, gene, gene_locus, sequence))
 
     if rowcount == 0:  # insert
-        AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Subclass, Superorder, Order, Suborder, \
-        Infraorder, Parvorder, Superfamily, Family, Subfamily, Tribe = get_full_taxonomy(genus, species)
+        try:
+            AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Subclass, Superorder, Order, Suborder, \
+            Infraorder, Parvorder, Superfamily, Family, Subfamily, Tribe = get_full_taxonomy(genus, species)
+
+
+        except:
+            return None
+
         AllOtherRank = AllOtherRank.replace("\'", "")
 
-        print(AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, Subclass, Superorder,
-                             Order,Suborder,Infraorder,Parvorder,Superfamily,Family,Subfamily, genus, Tribe, species,
-                             subspecies, gene, feature_type, gene_locus, int(partial), sequence)
+
         insert = 'INSERT INTO RefGenes (AllOtherRank, Superkingdom, Kingdom, Superphylum, Phylum, Subphylum, Class, ' \
                  'Subclass, Superorder, "Order", Suborder, Infraorder, Parvorder, Superfamily, Family, Subfamily,  ' \
                  'Genus, Tribe, Species, subspecies, GeneName, GeneType, AccessionNumber, PartialFLag, GeneSequence) ' \
@@ -696,7 +803,7 @@ def get_response(url):
         return response
 
     else:
-        retries = 10
+        retries = 100
         for i in range(retries):
             try:
                 conn = httplib.HTTPSConnection(_server)
@@ -725,7 +832,6 @@ if __name__ == '__main__':
         sample_list = sys.argv[1]  # raw data list from Alan's lab [id, family, genus, species]
 
     except IndexError:
-        # print "please specify a filename"
         print "Using Default Filename"
         sample_list = "SampleList.csv"
 
@@ -734,18 +840,73 @@ if __name__ == '__main__':
         #Check that genes are qualified geneList names, to avoid redundant DB entries
         for gene in geneList:
             if gene.upper() == 'TRNG':
-                print(' If trnG is not available. Try trnS.')
+                print(' If trnG is not available. Try trnS as a seed.')
             if gene.upper() == "TRNL":
-                print('If trnL not available. Try rpl32 or trnT.')
+                print('If trnL not available. Try rpl32 or trnT as a seed.')
             if gene.upper() ==  'YCF6':
-                print('If ycf6 is not available, try trnC.')
+                print('If ycf6 is not available, try trnC as a seed.')
 
 
 
     except IndexError:
         print "Using default gene list"
+        # VERTEBRATE GENE LIST
         #geneList = ['COX1', 'CYTB', 'ND2', '12S', '16S', 'ND5']
-        geneList = ['COX1', 'ITS1','ITS2','rbcL','matK', 'trnH', 'atpF', 'psbA', 'psbK', 'rpl32', 'rpoC1', 'rpoB', 'atpB', 'ndhF', 'rps16', 'trnC', 'trnE', 'trnG', 'trnK', 'trnS','trnT', 'trnY', 'ycf1', 'ycf6']
+
+        #Angiosperm gene list
+        # trnP(GGG)-psaJ
+        '''
+        geneList = ['accD', 'atpA', 'atpB', 'atpE', 'atpF', 'cemA', 'clpP', 'ccsA', 'infA', 'matK',
+                    'ndhA', 'ndhB', 'ndhC', 'ndhD', 'ndhE', 'ndhG', 'ndhH', 'ndhI', 'ndhF', 'ndhJ', 'ndhK',
+                    'petA', 'petB', 'petD',
+                    'psaA', 'psaB', 'psaC', 'psaJ', 'psbA',
+                    'psbB', 'psbC', 'psbD', 'psbE', 'psbF', 'psbH', 'psbK', 'psnL', 'psbN', 'psbT', 'psbZ',
+                    'rbcL', 'rpl2', 'rpl12', 'rpl14', 'rpl16', 'rpl20', 'rpl23', 'rpl33',
+                    'rpoC1', 'rpoC2', 'rpoA', 'rpoB', 'rpl2',
+                    'rps2', 'rps4', 'rps7', 'rps8', 'rps11', 'rps12', 'rps14', 'rps15', 'rps16', 'rps18', 'rps19',
+                    'rrn16', 'rrn23',
+                    'trnA', 'trnC', 'trnE', 'trnG', 'trnH', 'trnH+psbA', 'trnI','trnK', 'trnL', 'trnS', 'trnT', 'trnY',
+                    'ycf1', 'ycf2', 'ycf3', 'ycf4', 'ycf6',
+                    'ITS1', 'ITS2', 'atpB+rbcL',  'atpF+atpH', 'ndhF+rpl32','ndhJ+trnC',
+                    'psbA+trnH', 'psbD+trnT','psbK+psbI',  'psbZ+trnG', 'rpl32+trnL', 'rp132+ndhF',
+                    'rpoB+trnC', 'rps4+trnS', 'rps16+trnQ', 'rps16+trnK', 'trnC+ycf6', 'trnC+petN',  'trnD+trnT',
+                    'trnE+trnT', 'trnE+trnY', 'trnG+trnS', 'trnL+trnF', 'trnQ+rps16', 'trnS+psbZ',
+                    'trnS+trnfM', 'trnS+trnG', 'trnT+trnL', 'trnY+trnE',  'ycf6+psbM', 'ycf6+trnC']
+        '''
+        #Plant Gene List
+        geneList = ['atpB', 'atpB+rbcL', 'atpE', 'matK', 'ndhF', 'psbA+trnH',
+                    'psbB', 'psbH', 'psbN', 'psbZ', 'psbZ+trnG',
+                    'rbcL', 'rpl16', 'rpl32+trnL', 'rpoC1', 'rps4', 'rps16', 'trnD+trnY', 'trnK+matK',
+                    'trnL+trnF', 'trnT+trnL', 'trnS+psbZ', 'ycf1', 'ITS1', 'ITS2']
+        
+        #Barcode gene list for angiosperms
+        #geneList = ['rbcl', 'matK', 'ITS1', 'ITS2', 'ycf1', 'trnH+psbA', 'psbA+trnH']
+
+        '''
+        #Angiosperm gene List
+        geneList = ['accD', 'atpA', 'atpB', 'atpE', 'atpF', 'cemA', 'clpP', 'ccsA', 'infA',
+                    'ndhA', 'ndhB', 'ndhC', 'ndhD', 'ndhE', 'ndhG', 'ndhH', 'ndhI', 'ndhF', 'ndhJ', 'ndhK',
+                    'matK', 'petA', 'petB', 'petD',
+                    'psaA', 'psaB', 'psaC', 'psaJ',
+                    'psbA', 'psbA+trnH',
+                    'psbB', 'psbC', 'psbD', 'psbE', 'psbF', 'psbH', 'psbH', 'psbK', 'psnL', 'psbN', 'psbT', 'psbZ',
+                    'rbcL', 'rbcLa', 'rpl2', 'rpl12', 'rpl14', 'rpl16', 'rpl20', 'rpl23', 'rpl33',
+                    'rpoC1', 'rpoC2', 'rpoA', 'rpoB', 'rpl2',
+                    'rps2', 'rps4', 'rps7', 'rps8', 'rps11', 'rps12', 'rps14', 'rps15', 'rps16', 'rps18', 'rps19',
+                    'rrn16', 'rrn23',
+                    'trnA', 'trnC', 'trnE', 'trnG', 'trnH', 'trnH+psbA', 'trnI','trnK', 'trnL', 'trnS', 'trnT', 'trnY',
+                    'ycf1', 'ycf2', 'ycf3', 'ycf4', 'ycf6', 'ITS1', 'ITS2']
+        '''
+
+
+        '''
+        #Intergenic spacers for angiosperms
+        geneList = ['atpB+rbcL',  'atpF+atpH', 'ndhF+rpl32', 'ndhJ+trnC',  'psbA+trnH', 'psbD+trnT',
+                    'psbK+psbI',  'psbZ+trnG', 'rpl32+trnL', 'rp132+ndhF', 'rpoB+trnC', 'rps4+trnS', 'rps16+trnQ',
+                    'rps16+trnK', 'trnC+ycf6', 'trnC+petN',  'trnD+trnT',  'trnE+trnT', 'trnE+trnY', 'trnG+trnS',
+                    'trnH+psbA',  'trnL+trnF', 'trnQ+rps16', 'trnS+psbZ',  'trnS+trnfM', 'trnS+trnG', 'trnT+trnL',
+                    'trnY+trnE',  'ycf6+psbM', 'ycf6+trnC']
+        '''
 
     old_genus = None
     old_species = None
@@ -808,27 +969,34 @@ if __name__ == '__main__':
                     species = trans_species
 
             if giIDs is not None:
+                print("gi ids FOUND")
                 giID = giIDs[0].string
                 # Subspecies is whatever is listed in the database, may be different from the subspecies given in the sample list
                 xml, Subspecies = getXML(genus, species, genome, giID)  # try getting XML for complete genome
 
             else:  # No id was returned for the genome, can't retrieve xml
+                #print("gi id not found for complete genome ")
                 xml = None
 
             entry = None  # "successful" if a sequence is entered into the Database
 
             if xml is not None:  # Genome present
+                print(" xml found for complete genome ")
                 for gene in geneList:  # get all genes from one XML file
 
                     entry = get_gene_from_xml(xml, gene, dbConnection, Subspecies)
 
-                    if entry is None:  # gene name doesn't match or gene location not given in xml
+                    if entry is None:
+                        print("# gene doesn't match or gene location not given in xml")
                         # shouldn't happen unless missing a synonym
                         print str(gene) + " not found in genome of " + str(genus) + ' ' + str(species)
                         fout.write(str(gene) + ',' + str(line))
+                    else:
+                        print(gene + " gene found")
 
-            else:  # Genome not present, xml was None for Genome search, Now search for genes
-                for gene in geneList:  # get separate XML file for each gene
+
+            else: # Genome not present, xml was None for Genome search, Now search for genes
+                for gene in geneList:
                     giIDs, trans_genus, trans_species = get_ids(genus, species, subspecies, gene)
 
                     # trans_genus and trans_species already set during genome search, ignore them here
